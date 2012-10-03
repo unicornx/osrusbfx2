@@ -1,0 +1,769 @@
+<html>
+
+<head>
+<meta http-equiv=Content-Type content="text/html; charset=windows-1252">
+<meta name=Generator content="Microsoft Word 12 (filtered)">
+<title>User-Mode OSR USB-FX2 Sample Function Driver</title>
+<style>
+<!--
+ /* Font Definitions */
+ @font-face
+	{font-family:"Cambria Math";
+	panose-1:2 4 5 3 5 4 6 3 2 4;}
+@font-face
+	{font-family:Cambria;
+	panose-1:2 4 5 3 5 4 6 3 2 4;}
+@font-face
+	{font-family:Verdana;
+	panose-1:2 11 6 4 3 5 4 4 2 4;}
+ /* Style Definitions */
+ p.MsoNormal, li.MsoNormal, div.MsoNormal
+	{margin:0in;
+	margin-bottom:.0001pt;
+	font-size:12.0pt;
+	font-family:"Times New Roman","serif";}
+h1
+	{mso-style-link:"Heading 1 Char";
+	margin-right:0in;
+	margin-left:0in;
+	font-size:24.0pt;
+	font-family:"Times New Roman","serif";
+	font-weight:bold;}
+h2
+	{mso-style-link:"Heading 2 Char";
+	margin-right:0in;
+	margin-left:0in;
+	font-size:18.0pt;
+	font-family:"Times New Roman","serif";
+	font-weight:bold;}
+a:link, span.MsoHyperlink
+	{color:blue;
+	text-decoration:underline;}
+a:visited, span.MsoHyperlinkFollowed
+	{color:purple;
+	text-decoration:underline;}
+p
+	{margin-right:0in;
+	margin-left:0in;
+	font-size:12.0pt;
+	font-family:"Times New Roman","serif";}
+span.Heading1Char
+	{mso-style-name:"Heading 1 Char";
+	mso-style-link:"Heading 1";
+	font-family:"Cambria","serif";
+	color:#365F91;
+	font-weight:bold;}
+span.Heading2Char
+	{mso-style-name:"Heading 2 Char";
+	mso-style-link:"Heading 2";
+	font-family:"Cambria","serif";
+	color:#4F81BD;
+	font-weight:bold;}
+p.style1, li.style1, div.style1
+	{mso-style-name:style1;
+	margin-right:0in;
+	margin-left:0in;
+	font-size:12.0pt;
+	font-family:"Verdana","sans-serif";}
+p.style2, li.style2, div.style2
+	{mso-style-name:style2;
+	margin-right:0in;
+	margin-left:0in;
+	font-size:10.0pt;
+	font-family:"Verdana","sans-serif";}
+p.style3, li.style3, div.style3
+	{mso-style-name:style3;
+	margin-right:0in;
+	margin-left:0in;
+	font-size:10.0pt;
+	font-family:"Times New Roman","serif";}
+p.style4, li.style4, div.style4
+	{mso-style-name:style4;
+	margin-right:0in;
+	margin-left:0in;
+	font-size:10.0pt;
+	font-family:"Times New Roman","serif";
+	font-weight:bold;}
+p.msochpdefault, li.msochpdefault, div.msochpdefault
+	{mso-style-name:msochpdefault;
+	margin-right:0in;
+	margin-left:0in;
+	font-size:10.0pt;
+	font-family:"Times New Roman","serif";}
+span.style31
+	{mso-style-name:style31;}
+span.style21
+	{mso-style-name:style21;
+	font-family:"Verdana","sans-serif";}
+span.style11
+	{mso-style-name:style11;
+	font-family:"Verdana","sans-serif";}
+.MsoChpDefault
+	{font-size:10.0pt;}
+@page Section1
+	{size:8.5in 11.0in;
+	margin:1.0in 1.0in 1.0in 1.0in;}
+div.Section1
+	{page:Section1;}
+ /* List Definitions */
+ ol
+	{margin-bottom:0in;}
+ul
+	{margin-bottom:0in;}
+-->
+</style>
+
+</head>
+
+<body lang=EN-US link=blue vlink=purple>
+
+<div class=Section1>
+
+<h1><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOSRUSBFX2</span></h1>
+
+<h2><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>SUMMARY</span></h2>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>The
+OSRUSBFX2 sample demonstrates how to perform bulk and interrupt data transfers
+to an USB device using User-Mode Driver Framework. This sample is written for
+OSR USB-FX2 Learning Kit. The specification for the device is at <b><a
+href="http://www.osronline.com/hardware/OSRFX2_32.pdf">http://www.osronline.com/hardware/OSRFX2_32.pdf</a>.&nbsp;
+</b></span></p>
+
+<p class=style4><span style='font-family:"Verdana","sans-serif"'>Here is the
+overview of the device:</span></p>
+
+<ul style='margin-top:0in' type=disc>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Device
+     is loosely based on the development board supplied with the Cypress EZ-USB
+     FX2 Development Kit (CY3681)</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Contains
+     1 interface and 3 endpoints (Interrupt IN, Bulk Out, Bulk IN)</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Firmware
+     supports vendor commands to query or set LED Bar graph display, 7-segment
+     LED display and query toggle switch states</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Interrupt
+     Endpoint: </span></li>
+ <ul style='margin-top:0in' type=circle>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Sends
+      an 8-bit value that represents the state of the switches</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Sent
+      on startup, resume from suspend, and whenever the switch pack setting
+      changes</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Firmware
+      does not de-bounce the switch pack</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>One
+      switch change can result in multiple bytes being sent </span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Bits
+      are in the reverse order of the labels on the pack <br>
+      E.g.&nbsp; bit 0x80 is labeled 1 on the pack</span></li>
+ </ul>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Bulk
+     Endpoints are configured for loopback: </span></li>
+ <ul style='margin-top:0in' type=circle>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Device
+      moves data from IN endpoint to OUT endpoint</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Device
+      does not change the values of the data it receives nor does it internally
+      create any data</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Endpoints
+      are always double buffered</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Max
+      packet size depends on speed (64 Full speed, 512 High speed)</span></li>
+ </ul>
+</ul>
+
+<p class=style3><span style='font-family:"Verdana","sans-serif"'>This sample
+driver is developed iteratively as a series of steps - starting with a most
+basic &quot;Hello World&quot; driver to fully functional driver in the 'Final'
+step. Each step progressively adds functionality to the previous step. The
+description of what is demonstrated in each step is given in the table below.</span></p>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=877
+ style='width:657.75pt;border-collapse:collapse' id=table1>
+ <tr>
+  <td width=156 style='width:116.85pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>Step1</span></p>
+  </td>
+  <td width=721 style='width:540.9pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>The is the most basic step.
+  The source file contains absolutely minimal amount of code to get the driver
+  loaded in memory and respond to PNP and Power events. You can install,
+  uninstall, disable, enable, suspend and resume the system and everything will
+  work fine.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=156 style='width:116.85pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>Step2</span></p>
+  </td>
+  <td width=721 style='width:540.9pt;padding:.75pt .75pt .75pt .75pt'>
+  <ol style='margin-top:0in' start=1 type=1>
+   <li class=MsoNormal><span style='font-size:10.0pt'>Device registers a Pnp
+       device interface so that application can open an handle to the device.</span></li>
+   <li class=MsoNormal><span style='font-size:10.0pt'>Device object implements
+       IPnpCallbackHardware interface and initializes USB I/O targets in
+       IPnpCallbackHardware::OnPrepareHardware method.</span></li>
+  </ol>
+  </td>
+ </tr>
+ <tr>
+  <td width=156 style='width:116.85pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>Step3</span></p>
+  </td>
+  <td width=721 style='width:540.9pt;padding:.75pt .75pt .75pt .75pt'>
+  <ol style='margin-top:0in' start=1 type=1>
+   <li class=MsoNormal><span style='font-size:10.0pt'>Creates a sequential
+       queue for handling IOCTL requests.</span></li>
+   <li class=MsoNormal><span style='font-size:10.0pt'>Adds code to handle the
+       IOCTL to set bar graph display.</span></li>
+  </ol>
+  </td>
+ </tr>
+ <tr>
+  <td width=156 style='width:116.85pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>Step4</span></p>
+  </td>
+  <td width=721 style='width:540.9pt;padding:.75pt .75pt .75pt .75pt'>
+  <ol style='margin-top:0in' start=1 type=1>
+   <li class=MsoNormal><span style='font-size:10.0pt'>Creates a parallel queue
+       for handling read and write requests.</span></li>
+   <li class=MsoNormal><span style='font-size:10.0pt'>Retrieves memory from read
+       and write requests, format the requests and sends it to USB target.</span></li>
+  </ol>
+  </td>
+ </tr>
+ <tr>
+  <td width=156 style='width:116.85pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>Final</span></p>
+  </td>
+  <td width=721 style='width:540.9pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span class=style31><span style='font-size:10.0pt'>This
+  steps adds the following functionality to complete the driver:</span></span></p>
+  <ol style='margin-top:0in' start=1 type=1>
+   <li class=MsoNormal><span style='font-size:10.0pt'>Supports additional
+       IOCTLs to get &amp; set the 7-segment display, get bar graph display and
+       to get config descriptor.</span></li>
+   <li class=MsoNormal><span style='font-size:10.0pt'>Sets power policy for the
+       device.</span></li>
+   <li class=MsoNormal><span style='font-size:10.0pt'>Adds code to indicate
+       that the device is ready by lighting up the period on seven- segment
+       display.</span></li>
+  </ol>
+  </td>
+ </tr>
+ <tr>
+  <td width=156 style='width:116.85pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>Impersonation</span></p>
+  </td>
+  <td width=721 style='width:540.9pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>This adds to Final &amp;
+  demonstrates some additional UMDF features.&nbsp; In particular this sample shows
+  how to escape to SetupDi functions to determine the &quot;BusTypeGUID&quot;
+  of the device, and how to use impersonation to access resources that only the
+  caller has access to.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=156 style='width:116.85pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>IdleWake_PPO</span></p>
+  </td>
+  <td width=721 style='width:540.9pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>This adds idle and wake
+  functionality to ‘Final’ using the framework(UMDF) as the power policy owner.
+  It uses power managed queues and UMDF DDIs, AssignS0IdleSettings and
+  AssignSxWakeSettings to achieve this. This driver code is shared with
+  IdleWake_Non-PPO and parts of it are conditionally compiled. </span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=156 style='width:116.85pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>IdleWake_Non-PPO</span></p>
+  </td>
+  <td width=721 style='width:540.9pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>This sample shows how to
+  leverage WinUsb.sys for idle and wake functionality. It shows the
+  corresponding changes needed in the UMDF driver to support this. UMDF is not
+  the power policy owner in this device stack and the driver should not use
+  power managed queues. This driver code is shared with IdleWake_PPO and parts
+  of it are conditionally compiled.&nbsp; &nbsp;</span></p>
+  <p class=MsoNormal><span style='font-size:10.0pt'>Both Final and IdleWake
+  &nbsp;samples demonstrate implementation of a continuous reader. &nbsp;</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=156 style='width:116.85pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>Exe</span></p>
+  </td>
+  <td width=721 style='width:540.9pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>This directory contains a
+  test application which can be used to drive the UMDF driver and Fx2
+  device.&nbsp; This is a modified version of the test application for the KMDF
+  Fx2 driver.</span></p>
+  </td>
+ </tr>
+</table>
+
+<p class=style1><span class=style31><span style='font-size:10.0pt'>Se</span></span><span
+style='font-size:10.0pt'>e the UMDF Readme.htm file for more information about <a
+href="../../readme.htm#Supported_Environments">supported operating systems</a>
+and <a href="../../readme.htm#BuildEnv">building the samples</a>.</span></p>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width="100%"
+ style='width:100.0%;background:#CCCCCC;border-collapse:collapse' id=table3>
+ <tr>
+  <td width=60 style='width:45.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=style3><strong><span style='font-family:"Verdana","sans-serif"'>Note:</span></strong></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+  sample requires installation of WinUsb runtime on Windows XP and would not
+  work without that.&nbsp; The WinUsb co-installer will install WinUsb during
+  your driver's installation and can be found in the \winddk\&lt;bld&gt;\redist
+  directory.</span></p>
+  </td>
+ </tr>
+</table>
+
+<h2><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>BUILDING
+THE SAMPLE</span></h2>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Start a
+build environment window as described under<b> <a
+href="../../readme.htm#buildenv">Building and Testing the Samples</a> </b>the
+UMDF Readme file.</span></p>
+
+<p><span class=style31><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Change
+to the directory containing the device source code, such as &quot;</span></span><span
+class=style21><span style='font-size:10.0pt'>CD c:\WINDDK\&lt;build
+number&gt;\src\usb\osrusbfx2\umdf\fx2_driver\&lt;step&gt;&quot; (the WINDDK
+location and build number may vary).</span></span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Run build
+-ceZ, or use the macro BLD. This command invokes the Microsoft make routines to
+build the components. If the build succeeds, you will find the driver,
+WUDFOsrUsbFx2.dll for the final step (WUDFOsrUsbFx2_N.dll for steps 1-4, where
+N is the step number) in the binary output directory specified for the build
+environment. You can get the output path from the buildxxx.log file. If it
+fails you can find errors and warnings in the build error (.err) and warning
+(.wrn) log files respectively (buildfre_wlh_x86.err for example). </span></p>
+
+<h2><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>INSTALLATION</span></h2>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>To test
+the sample you will need to setup your test system as described <b><a
+href="../../readme.htm#buildenv">Building and Testing the Samples</a> </b>the
+UMDF Readme file.</span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>You will
+also need to copy the co-installer for the Kernel-Mode Driver Framework into
+the directory with your driver binary and INF (and include it in the catalog
+file if you're signing the driver package). This sample driver makes use of
+WinUSB, which is a KMDF based driver and so requires the KMDF co-installer for
+proper installation. </span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Driver
+binary name and the inf name depend upon the step, as described in the
+following table:</span></p>
+
+<table class=MsoNormalTable border=1 cellpadding=0 width="70%"
+ style='width:70.0%'>
+ <tr>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal align=center style='text-align:center'><span
+  style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Step</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal align=center style='text-align:center'><span
+  style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Driver Binary</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal align=center style='text-align:center'><span
+  style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>INF</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Step
+  1-4</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOsrUsbFx2_N.dll,
+  where N is the step number</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOsrUsbFx2_N.inf,
+  where N is the step number</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Final</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOsrUsbFx2.dll</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOsrUsbFx2.inf</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Impersonation</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOsrUsbFx2_Imp.dll</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOsrUsbFx2_Imp.inf</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>IdleWake_PPO</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOsrUsbFx2_IdleWake_PPO.dll</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOsrUsbFx2_IdleWake_PPO.inf</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>IdleWake_Non-PPO</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOsrUsbFx2_IdleWake_Non-PPO.dll</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOsrUsbFx2_IdleWakeNon-PPO.inf</span></p>
+  </td>
+ </tr>
+</table>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+sample's INF allows you to install the driver on the OSR USB-FX2 Learning Kit
+board from <a href="http://www.osronline.com">OSR</a>.&nbsp; </span></p>
+
+<p class=style3><span style='font-family:"Verdana","sans-serif"'>To install the
+USB-FX2 driver on Windows XP (SP2 and above), Vista and later operating
+systems:</span></p>
+
+<ol style='margin-top:0in' start=1 type=1>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Copy
+     the driver binary (WUDFOsrUsbFx2.dll for the final step) and the inf file
+     (WUDFOsrUsbFx2.inf for the final step) to a directory on your test machine
+     (for example c:\usbSample).</span></li>
+ <li class=MsoNormal><span class=style21><span style='font-size:10.0pt'>C</span></span><span
+     class=style11><span style='font-size:10.0pt'>opy the required coinstallers
+     for this sample from c:\winddk\&lt;bld&gt;\redist to the same directory
+     (for example c:\skeletonSample)</span></span></li>
+</ol>
+
+<ol style='margin-top:0in' start=2 type=1>
+ <ol style='margin-top:0in' start=1 type=1>
+  <li class=MsoNormal><span style='font-family:"Verdana","sans-serif"'>w</span><span
+      class=style31><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>df\WUDFUpdate_01009.dll
+      - the UMDF 1.9 coinstaller</span></span></li>
+  <li class=MsoNormal><span style='font-family:"Verdana","sans-serif"'>w</span><span
+      class=style31><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>inusb\WinUsbCoinstaller2.dll
+      - the WinUsb coinstaller (required for USB support)</span></span></li>
+  <li class=MsoNormal><span style='font-family:"Verdana","sans-serif"'>w</span><span
+      class=style31><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>df\WdfCoinstaller01009.dll
+      - the KMDF 1.9 coinstaller (required by WinUsb)</span></span></li>
+ </ol>
+</ol>
+
+<ol style='margin-top:0in' start=3 type=1>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Attach
+     the OSR USB-FX2 device to your computer.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>At
+     the &quot;Welcome to the Found New Hardware Wizard&quot; choose &quot;No,
+     not this time&quot; and click Next.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Select
+     &quot;Install from a list or specific location (Advanced)&quot; and click
+     Next.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Select
+     &quot;Search for the best driver in these locations&quot;.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Clear
+     the &quot;Search removable media (floppy, CD-ROM ...)&quot; check box.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Select
+     the &quot;Include this location in the search&quot; check box.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Enter
+     the path to the files (for example: c:\usbSample) under that check box and
+     click Next.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Click
+     Finish at 'Completing the Found New Hardware Wizard.'</span></li>
+</ol>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width="100%"
+ style='width:100.0%;background:#CCCCCC;border-collapse:collapse' id=table2>
+ <tr>
+  <td width=60 style='width:45.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=style3><span style='font-family:"Verdana","sans-serif"'>Note:</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Between
+  steps 8 and 9 you may see a &quot;Please select the best match for your
+  hardware from the list below&quot; page.&nbsp; This happens when there are
+  multiple INFs which match your hardware.&nbsp; If this happens you should
+  select an entry with &quot;<b>Microsoft OSR USB Driver</b>&quot; in the
+  'Description' column and the directory which holds the INF (for example c:\usbSample)
+  in the 'Location' column.&nbsp; If you have multiple versions of an INF in
+  that directory, you may also need to check the 'Version' column to find the
+  highest version number.</span></p>
+  <p class=style3><span style='font-family:"Verdana","sans-serif"'>Occasionally
+  you may be told that no newer driver could be found for your device in this
+  case.&nbsp; If that should happen use the alternate installation instructions
+  below.</span></p>
+  </td>
+ </tr>
+</table>
+
+<p class=style3><span style='font-family:"Verdana","sans-serif"'>Alternately
+you may use DevCon to install the sample driver for the OSR USB device:</span></p>
+
+<ol style='margin-top:0in' start=1 type=1>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Copy
+     the driver binary (WUDFOsrUsbFx2.dll for the final step) and the inf file (WUDFOsrUsbFx2.inf
+     for the final step) to a directory on your test machine (for example
+     c:\usbSample).</span></li>
+ <li class=MsoNormal><span class=style21><span style='font-size:10.0pt'>C</span></span><span
+     class=style11><span style='font-size:10.0pt'>opy the required coinstallers
+     for this sample from </span></span><span style='font-size:10.0pt'><a
+     href="../../../../../../../../winddk/%3cbld%3e/"><span class=style11>c:\winddk\&lt;bld&gt;\</span></a></span><span
+     class=style11><span style='font-size:10.0pt'>redist to the same directory
+     (for example c:\skeletonSample)</span></span></li>
+</ol>
+
+<ol style='margin-top:0in' start=2 type=1>
+ <ol style='margin-top:0in' start=1 type=1>
+  <li class=MsoNormal><span style='font-family:"Verdana","sans-serif"'>w</span><span
+      class=style31><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>df\WUDFUpdate_01009.dll
+      - the UMDF 1.9 coinstaller</span></span></li>
+  <li class=MsoNormal><span style='font-family:"Verdana","sans-serif"'>w</span><span
+      class=style31><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>inusb\WinUsbCoinstaller2.dll
+      - the WinUsb coinstaller (required for USB support)</span></span></li>
+  <li class=MsoNormal><span style='font-family:"Verdana","sans-serif"'>w</span><span
+      class=style31><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>df\WdfCoinstaller01009.dll
+      - the KMDF 1.9 coinstaller (required by WinUsb)</span></span></li>
+ </ol>
+</ol>
+
+<ol style='margin-top:0in' start=3 type=1>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Attach
+     the OSR USB-FX2 device to your computer.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>At
+     the &quot;Welcome to the Found New Hardware Wizard&quot; click Cancel.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Change
+     to the directory containing the inf and binaries (for example <b>cd /d
+     c:\usbSample</b>.)</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Run
+     devcon.exe as follows:<br>
+     <br>
+     <span class=style21>devcon.exe update &lt;inf name&gt; &quot;USB\Vid_0547&amp;Pid_1002&quot;</span>
+     <br>
+     <span class=style31>(note: the quotes are important because of the &amp;)</span><br>
+     <br>
+     <span class=style31>DevCon can be found in the tools directory of your WDK
+     enlistment (for example: d:\winddk\<buildNumber>tools\devcon\i386\devcon.exe.)</span></span></li>
+</ol>
+
+<p class=style3><span style='font-family:"Verdana","sans-serif"'>To update the
+sample driver after making any changes:</span></p>
+
+<ol style='margin-top:0in' start=1 type=1>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Increment
+     the version number found in the INF.&nbsp; While this is not strictly
+     necessary, it will help ensure PnP selects your new driver as a better
+     match for the device.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Copy
+     the driver binary and the WUDFOsrUsbDriver.inf file to a directory on your
+     test machine (for example c:\usbSample).</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Follow
+     instructions 4 and 5 above</span></li>
+</ol>
+
+<h2><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>CODE TOUR</span></h2>
+
+<table class=MsoNormalTable border=1 cellpadding=0 width="75%"
+ style='width:75.0%' id=table1>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>File
+  Manifest</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>File
+  Description</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Usb.htm</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Documentation
+  for this sample (this file).</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>comsup.cpp
+  &amp; comsup.h</span></p>
+  </td>
+  <td width=604 style='width:453.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span class=style31><span style='font-size:10.0pt;
+  font-family:"Verdana","sans-serif"'>COM Support code - specifically base
+  classes which provide implementations for the standard COM interfaces
+  IUnknown and IClassFactory which are used throughout the sample.</span></span></p>
+  <p class=style3><span style='font-family:"Verdana","sans-serif"'>The
+  implementation of IClassFactory is designed to create instances of the
+  CMyDriver class. If you should change the name of your base driver class, you
+  would also need to modify this file.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>dllsup.cpp</span></p>
+  </td>
+  <td width=604 style='width:453.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span class=style31><span style='font-size:10.0pt;
+  font-family:"Verdana","sans-serif"'>DLL Support code - provides the DLL's
+  entry point as well as the single required export (DllGetClassObject).</span></span></p>
+  <p class=style3><span style='font-family:"Verdana","sans-serif"'>These depend
+  on comsup.cpp to perform the necessary class creation.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>exports.def</span></p>
+  </td>
+  <td width=604 style='width:453.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+  file lists the functions that the driver DLL exports.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>internal.h</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+  is the main header file for the sample driver. </span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>driver.cpp
+  &amp; driver.h</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Definition
+  and implementation of the driver callback class (CMyDriver) for the sample. </span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>device.cpp
+  &amp; driver.h</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Definition
+  and implementation of the device callback class (CMyDriver) for the sample.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>queue.cpp
+  &amp; queue.h</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Definition
+  and implementation of the base queue callback class (CMyQueue). CMyControlQueue
+  and CMyReadWriteQueue derive from CMyQueue. CMyQueue contains the common code</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>ControlQueue.cpp
+  &amp; ControlQueue.h</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Definition
+  and implementation of the queue callback class (CMyControlQueue) for IOCTL
+  requests.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>ReadWriteQueue.cpp
+  &amp; ReadWriteQueue.h</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Definition
+  and implementation of the queue callback class (CMyReadWriteQueue) for read
+  and write requests.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>osrusbdriver.rc</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+  file defines resource information for the sample driver.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>sources</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Generic
+  file that lists source files and all the build options</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOsrUsbDriver.inf</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Sample
+  INF for installing the sample driver to control the OSR USB-FX2 Learning Kit
+  device</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>osrusbdriver.ctl</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span class=style31><span style='font-size:10.0pt;
+  font-family:"Verdana","sans-serif"'>This file lists the WPP trace control GUID(s)
+  for the sample driver. This file can be used with the tracelog command's
+  -guid flag to enable the collection of these trace events within an
+  established trace session.</span></span></p>
+  <p class=style3><span style='font-family:"Verdana","sans-serif"'>These GUIDs
+  must remain in sync with the trace control guids defined in internal.h</span></p>
+  </td>
+ </tr>
+</table>
+
+<p class=style3 align=center style='text-align:center'><span style='font-family:
+"Verdana","sans-serif"'><a href="#top">Top of Page</a></span></p>
+
+<p class=style3><span style='font-family:"Verdana","sans-serif"'>© 2005
+Microsoft Corporation</span></p>
+
+<p class=style2>&nbsp;</p>
+
+<p class=MsoNormal>&nbsp;</p>
+
+</div>
+
+</body>
+
+</html>
+

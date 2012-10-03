@@ -1,0 +1,21 @@
+TARGETNAME=filter
+TARGETTYPE=DRIVER
+
+
+KMDF_VERSION_MAJOR=1
+
+MSC_WARNING_LEVEL=/W4 /WX
+
+TARGETLIBS=$(TARGETLIBS) \
+           $(DDK_LIB_PATH)\wdmsec.lib \
+           $(DDK_LIB_PATH)\ntstrsafe.lib \
+           $(DDK_LIB_PATH)\rtlver.lib
+
+INCLUDES=$(INCLUDES);..\inc
+
+SOURCES= filter.c  \
+         filter.rc \
+         rawpdo.c
+         
+TARGET_DESTINATION=wdf
+

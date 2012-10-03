@@ -1,0 +1,36 @@
+TARGETNAME=WudfOsrUsbFx2Test
+TARGETTYPE=PROGRAM
+
+UMTYPE=console
+UMBASE=0x01000000
+
+UMENTRY=wmain
+
+_NT_TARGET_VERSION= $(_NT_TARGET_VERSION_WINXP)
+
+# for scanf_s
+USE_MSVCRT=1
+
+C_DEFINES = $(C_DEFINES) -DUNICODE=1 -D_UNICODE=1
+
+!if defined(DDKBUILDENV)
+
+C_DEFINES = $(C_DEFINES) -DBUILT_IN_DDK=1 -DUNICODE=1 -D_UNICODE=1
+
+!endif
+
+MSC_WARNING_LEVEL=-W4 -WX
+
+# MSC_OPTIMIZATION_LEVEL=/W4 
+INCLUDES=..\..\inc;$(DDK_INC_PATH);
+
+
+TARGETLIBS= $(DDK_LIB_PATH)\usbd.lib \
+            $(SDK_LIB_PATH)\setupapi.lib
+
+SOURCES= testapp.c  \
+         dump.c \
+         testapp.rc
+
+TARGET_DESTINATION=wudf
+

@@ -1,0 +1,20 @@
+TARGETNAME=osrusbfx2
+TARGETTYPE=DRIVER
+
+
+
+INCLUDES = ..\inc\
+
+KMDF_VERSION_MAJOR=1
+
+TARGETLIBS=$(TARGETLIBS) \
+           $(DDK_LIB_PATH)\ntstrsafe.lib
+
+SOURCES=step5.c 
+
+RUN_WPP= $(SOURCES)                                \
+         -km                                       \
+         -ctl:d23a0c5a-d307-4f0e-ae8e-E2A355AD5DAB \
+         -func:KdPrint((MSG,...))                  \
+         -gen:{km-WdfDefault.tpl}*.tmh       
+

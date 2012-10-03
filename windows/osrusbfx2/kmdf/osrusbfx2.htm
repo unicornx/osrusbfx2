@@ -1,0 +1,676 @@
+<html>
+
+<head>
+<meta http-equiv=Content-Type content="text/html; charset=windows-1252">
+<meta name=Generator content="Microsoft Word 12 (filtered)">
+<title>OSRUSBFX2</title>
+<style>
+<!--
+ /* Font Definitions */
+ @font-face
+	{font-family:"Cambria Math";
+	panose-1:2 4 5 3 5 4 6 3 2 4;}
+@font-face
+	{font-family:Cambria;
+	panose-1:2 4 5 3 5 4 6 3 2 4;}
+@font-face
+	{font-family:Verdana;
+	panose-1:2 11 6 4 3 5 4 4 2 4;}
+@font-face
+	{font-family:Consolas;
+	panose-1:2 11 6 9 2 2 4 3 2 4;}
+@font-face
+	{font-family:"Verdana Ref";}
+ /* Style Definitions */
+ p.MsoNormal, li.MsoNormal, div.MsoNormal
+	{margin:0in;
+	margin-bottom:.0001pt;
+	font-size:12.0pt;
+	font-family:"Times New Roman","serif";}
+h2
+	{mso-style-link:"Heading 2 Char";
+	margin-right:0in;
+	margin-left:0in;
+	font-size:18.0pt;
+	font-family:"Times New Roman","serif";
+	font-weight:bold;}
+h3
+	{mso-style-link:"Heading 3 Char";
+	margin-right:0in;
+	margin-left:0in;
+	font-size:13.5pt;
+	font-family:"Times New Roman","serif";
+	font-weight:bold;}
+a:link, span.MsoHyperlink
+	{color:blue;
+	text-decoration:underline;}
+a:visited, span.MsoHyperlinkFollowed
+	{color:purple;
+	text-decoration:underline;}
+p
+	{margin-right:0in;
+	margin-left:0in;
+	font-size:12.0pt;
+	font-family:"Times New Roman","serif";}
+pre
+	{mso-style-link:"HTML Preformatted Char";
+	margin:0in;
+	margin-bottom:.0001pt;
+	font-size:10.0pt;
+	font-family:"Courier New";}
+span.Heading2Char
+	{mso-style-name:"Heading 2 Char";
+	mso-style-link:"Heading 2";
+	font-family:"Cambria","serif";
+	color:#4F81BD;
+	font-weight:bold;}
+span.Heading3Char
+	{mso-style-name:"Heading 3 Char";
+	mso-style-link:"Heading 3";
+	font-family:"Cambria","serif";
+	color:#4F81BD;
+	font-weight:bold;}
+span.HTMLPreformattedChar
+	{mso-style-name:"HTML Preformatted Char";
+	mso-style-link:"HTML Preformatted";
+	font-family:Consolas;}
+p.msochpdefault, li.msochpdefault, div.msochpdefault
+	{mso-style-name:msochpdefault;
+	margin-right:0in;
+	margin-left:0in;
+	font-size:10.0pt;
+	font-family:"Times New Roman","serif";}
+.MsoChpDefault
+	{font-size:10.0pt;}
+@page Section1
+	{size:8.5in 11.0in;
+	margin:1.0in 1.0in 1.0in 1.0in;}
+div.Section1
+	{page:Section1;}
+ /* List Definitions */
+ ol
+	{margin-bottom:0in;}
+ul
+	{margin-bottom:0in;}
+-->
+</style>
+
+</head>
+
+<body lang=EN-US link=blue vlink=purple>
+
+<div class=Section1>
+
+<h2><span style='font-family:"Verdana","sans-serif"'>OSRUSBFX2</span></h2>
+
+<h3><span style='font-family:"Verdana","sans-serif"'>Summary</span></h3>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>The
+OSRUSBFX2 sample demonstrates how to perform bulk and interrupt data transfers
+to an USB device using Windows Driver Framework (WDF). This sample is written
+for OSR USB-FX2 Learning Kit. The specification for the device is at <b><a
+href="http://www.osronline.com/hardware/OSRFX2_32.pdf">http://www.osronline.com/hardware/OSRFX2_32.pdf</a>.&nbsp;
+</b></span></p>
+
+<p><b><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Here is
+the overview of the device:</span></b></p>
+
+<ul style='margin-top:0in' type=disc>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Device
+     is loosely based on the development board supplied with the Cypress EZ-USB
+     FX2 Development Kit (CY3681)</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Contains
+     1 interface and 3 endpoints (Interrupt IN, Bulk Out, Bulk IN)</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Firmware
+     supports vendor commands to query or set LED Bar graph display, 7-segment
+     LED display and query toggle switch states</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Interrupt
+     Endpoint: </span></li>
+ <ul style='margin-top:0in' type=circle>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Sends
+      an 8-bit value that represents the state of the switches</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Sent
+      on startup, resume from suspend, and whenever the switch pack setting
+      changes</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Firmware
+      does not de-bounce the switch pack</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>One
+      switch change can result in multiple bytes being sent </span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Bits
+      are in the reverse order of the labels on the pack <br>
+      E.g.&nbsp; bit 0x80 is labeled 1 on the pack</span></li>
+ </ul>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Bulk
+     Endpoints are configured for loopback: </span></li>
+ <ul style='margin-top:0in' type=circle>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Device
+      moves data from IN endpoint to OUT endpoint</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Device
+      does not change the values of the data it receives nor does it internally
+      create any data</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Endpoints
+      are always double buffered</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Max
+      packet size depends on speed (64 Full speed, 512 High speed)</span></li>
+ </ul>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>ETW
+     events: included osrusbfx2.man which describes events added.</span></li>
+ <ul style='margin-top:0in' type=circle>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Three
+      events are targeted to the event log: </span></li>
+  <ul style='margin-top:0in' type=disc>
+   <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Failure
+       during the add device routine</span></li>
+   <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Failure
+       to start the OSR device on a USB 1.1 controller</span></li>
+   <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Invocation
+       of the “reenumerate device” IOCTL</span></li>
+  </ul>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>There
+      are read/write start/stop events that can be used to measure the time
+      taken. </span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>See
+      <a href="#_Unified_tracing">Unified Tracing</a> later in this document for
+      more information</span></li>
+ </ul>
+</ul>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+sample contains a console test application and a series of drivers. The driver
+is developed iteratively as a series of steps - starting with a most basic
+&quot;Hello World&quot; driver to fully functional driver in the 'Final' step.
+The description of what is demonstrated in each step is given in the table
+below.</span></p>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width=877
+ style='width:657.75pt;border-collapse:collapse' id=table1>
+ <tr>
+  <td width=158 style='width:118.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal>Step1</p>
+  </td>
+  <td width=736 style='width:552.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal>The is the most basic step. The source file contains
+  absolutely minimal amount of code to get the driver loaded in memory and
+  respond to PNP and Power events. You can install, uninstall, disable, enable,
+  suspend and resume the system and everything will work fine.</p>
+  </td>
+ </tr>
+ <tr>
+  <td width=158 style='width:118.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal>Step2</p>
+  </td>
+  <td width=736 style='width:552.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal>This step:</p>
+  <ol style='margin-top:0in' start=1 type=1>
+   <li class=MsoNormal>Creates a context with the WDFDEVICE object.</li>
+   <li class=MsoNormal>Initializes the USB device by registering a
+       EvtPrepareHardware callback</li>
+   <li class=MsoNormal>Registers an interface so that application can open an
+       handle to the device.</li>
+  </ol>
+  </td>
+ </tr>
+ <tr>
+  <td width=158 style='width:118.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal>Step3</p>
+  </td>
+  <td width=736 style='width:552.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <ol style='margin-top:0in' start=1 type=1>
+   <li class=MsoNormal>Creates a default parallel queue to receive an IOCTL
+       requests to set bar graph display.</li>
+   <li class=MsoNormal>Retrieves memory handle from the requests and use that
+       to send<br>
+       a vendor command to the USB device.</li>
+  </ol>
+  </td>
+ </tr>
+ <tr>
+  <td width=158 style='width:118.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal>Step4</p>
+  </td>
+  <td width=736 style='width:552.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <ol style='margin-top:0in' start=1 type=1>
+   <li class=MsoNormal>Registers read and write events on the default queue.</li>
+   <li class=MsoNormal>Retrieves memory from read and write request, format the
+       requests and send it to USB target.</li>
+  </ol>
+  </td>
+ </tr>
+ <tr>
+  <td width=158 style='width:118.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal>Step5</p>
+  </td>
+  <td width=736 style='width:552.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal>How to do WPP tracing</p>
+  </td>
+ </tr>
+ <tr>
+  <td width=158 style='width:118.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal>Final</p>
+  </td>
+  <td width=736 style='width:552.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal>This steps includes all the features list in the above
+  steps and the following:</p>
+  <ol style='margin-top:0in' start=1 type=1>
+   <li class=MsoNormal>Creates two separate sequential queues and configures
+       them to dispatch read and write requests directly.</li>
+   <li class=MsoNormal>Enables wait-wake and selective suspend support.</li>
+   <li class=MsoNormal>Configures a USB target continuous reader to read toggle
+       switch states asynchronously from the interrupt endpoint.</li>
+   <li class=MsoNormal>Supports additional IOCTLs to get &amp; set the
+       7-segment display, toggle switches, reset and re-enumerate device.</li>
+   <li class=MsoNormal>Added ETW provider to log two events to the eventlog,
+       and read/write start stop events. </li>
+  </ol>
+  </td>
+ </tr>
+ <tr>
+  <td width=158 style='width:118.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal>EnumSwitches</p>
+  </td>
+  <td width=736 style='width:552.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal>This is a stripped-down version of the final version. It's
+  meant to demonstrate child device enumeration support of WDF. This sample
+  configures a continuous reader on the interrupt pipe to read toggle switch
+  states and then enumerates each &quot;ON&quot; switch as a child device in
+  the completion callback of the continuous reader. The child devices are
+  enumerated as raw PDOs, so no INF file is required to install them.</p>
+  </td>
+ </tr>
+</table>
+
+<h3><a name=build></a><span style='font-family:"Verdana","sans-serif"'>Building
+the sample</span></h3>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>To build
+the sample drivers and exe, you must first set up the DDK environment on your
+host machine. The “Installation and Release Notes” in the Windows
+2000/XP/Server 2003 DDK has a complete description on how to do this. </span></p>
+
+<ol style='margin-top:0in' start=1 type=1>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Run
+     the build –ceZ command in the osrusbfx2\kmdf directory to build <i>osrusbfx2.sys</i>
+     and <i>osrusbfx2.exe</i>. The target driver name for all the steps is
+     same. So depending which step you want to test, you can copy the <i>osrusbfx2.sys
+     </i>from the build output directory.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Copy
+     <i>KMDF coinstaller (wdfcoinstallerMMmmm.dll)</i>, <i>osrusbfx2.sys</i>, <i>osrusbfx2.exe</i>,
+     and <i>osrusbfx2.inf</i> to a removable media or a temporary directory on
+     the target system. </span></li>
+</ol>
+
+<h3><span style='font-family:"Verdana","sans-serif"'>Installing the Driver</span></h3>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>If
+you adapting this driver for your device, make sure the INF file has been
+updated to match the hardware id (VID, PID), and the device description text to
+match your test board/device. </span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>When you
+plug in the device, depending on the operating system you are using: </span></p>
+
+<p><b><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>On
+Windows XP and later:</span></b></p>
+
+<ul style='margin-top:0in' type=disc>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>&quot;Found
+     New Hardware Wizard&quot; dialog box will appear. Here select the radio
+     button labeled &quot;Install from a list of specific location
+     (Advanced)&quot; and then hit the &quot;Next&quot; button. </span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>In
+     the following screen select the radio button labeled &quot; Search the
+     best driver in these locations&quot; and then select &quot;Include this
+     location in the search path&quot; and specify the target media or the
+     directory where the INF and SYS files are copied and then hit the
+     &quot;Next&quot; button. </span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>The
+     system will scan the directory and pick up the matching INF and start the
+     installation. You will get a Hardware Installation Warning dialog stating
+     that your driver has not passed Windows Logo Testing. Hit &quot;Continue
+     Anyway&quot; button. </span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>The
+     system will copy the driver, INF file, load the driver and start the
+     device. If everything goes fine, you will get &quot;Completing the Found
+     New Hardware Wizard&quot;. Hit the &quot;Finish&quot; button and the
+     installation is complete. </span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>You
+     should be able to see the device in the Device manager under &quot;Sample
+     Device&quot; </span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Register
+     the event logging information with the system:</span></li>
+ <ul style='margin-top:0in' type=circle>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>On
+      Vista and later run “wevtutil im osrusbfx2.man” from an elevated command
+      line</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>On
+      XP and Server 2003 run “mofcomp osrusbfx2.mof” from an administrator
+      command line.</span></li>
+  <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Both
+      the .man and .mof files can be found in the build output directory along
+      with osrusbfx2.sys and osrusbfx2.inf</span></li>
+ </ul>
+</ul>
+
+<p><b><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>On
+Windows 2000:</span></b></p>
+
+<ul style='margin-top:0in' type=disc>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>&quot;Found
+     New Hardware Wizard&quot; dialog box will appear with the description of
+     the device. Here click &quot;Next&quot; button. </span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>In
+     the following screen &quot;Install Hardware Device Driver&quot;, select
+     the radio button labeled &quot; Display a list of known drivers for this
+     device...&quot; and then click &quot;Next&quot; button.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>In
+     the following dialog on &quot;Hardware Type&quot;, select &quot;Other
+     Devices&quot; from the list and click &quot;Next&quot;.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>In
+     the dialog on &quot;Select a Device Driver&quot;, click on &quot;Have
+     Disk&quot;.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Specify
+     the target media or the directory where the INF and SYS files are copied
+     and then hit the &quot;Okay&quot; button. </span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Select
+     &quot;OSR&quot; in the Manufacture section selection and click
+     &quot;Next&quot;.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Click
+     &quot;Next&quot; on the &quot;Start Device Driver Installation&quot;
+     dialog.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Click
+     Finish at 'Completing the Add/Remove Hardware Wizard.' </span></li>
+</ul>
+
+<h3><span style='font-family:"Verdana","sans-serif"'>Testing</span></h3>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>You
+can use osrusbfx2.exe to test the device. This console application enumerates
+the interface registered by the driver and opens the device to send read, write
+or ioctl requests based on the command line options. </span></p>
+
+<pre>&nbsp;</pre><pre><span style='font-size:13.5pt;font-family:"Verdana","sans-serif"'>USAGE:</span></pre><pre><span
+style='font-size:13.5pt;font-family:"Verdana","sans-serif"'>&nbsp;</span></pre><pre><span
+style='font-size:13.5pt;font-family:"Verdana","sans-serif"'>Usage for Read/Write test:</span></pre><pre><span
+style='font-size:13.5pt;font-family:"Verdana","sans-serif"'>-r [n] where n is number of bytes to read</span></pre><pre><span
+style='font-size:13.5pt;font-family:"Verdana","sans-serif"'>-w [n] where n is number of bytes to write</span></pre><pre><span
+style='font-size:13.5pt;font-family:"Verdana","sans-serif"'>-c [n] where n is number of iterations (default = 1)</span></pre><pre><span
+style='font-size:13.5pt;font-family:"Verdana","sans-serif"'>-v verbose -- dumps read data</span></pre><pre><span
+style='font-size:13.5pt;font-family:"Verdana","sans-serif"'>-p play with Bar Display, Dip Switch, 7-Segment Display</span></pre><pre><span
+style='font-size:13.5pt;font-family:"Verdana","sans-serif"'>-a to perform asynchronous I/O</span></pre><pre><span
+style='font-size:13.5pt;font-family:"Verdana","sans-serif"'>-u to dump USB configuration and pipe info </span></pre>
+
+<h3><span style='font-family:"Verdana","sans-serif"'>Playing with the 7 segment
+display, toggle switches and bar graph display:</span></h3>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>osrusbfx2.exe
+-p option 1-9 allows to set and clear bar graph display, set and get 7 segment
+state, and read the toggle switch states.</span></p>
+
+<p><span style='font-family:"Courier New"'>USBFX TEST -- Functions:<br>
+<br>
+1. Light Bar<br>
+2. Clear Bar<br>
+3. Light entire Bar graph<br>
+4. Clear entire Bar graph<br>
+5. Get bar graph state<br>
+6. Get Switch state<br>
+7. Get Switch Interrupt Message<br>
+8. Get 7 segment state<br>
+9. Set 7 segment state<br>
+10. Reset the device<br>
+11. Reenumerate the device<br>
+<br>
+0. Exit<br>
+<br>
+Selection:</span></p>
+
+<h3><a name="_Reset_and_Reenumerate"></a><span style='font-family:"Verdana Ref"'>Reset
+and Reenumerate the device:</span></h3>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>osrusbfx2.exe
+-p and select option 10 and 11 to either reset the device or reenumerate the
+device.</span></p>
+
+<h3><span style='font-family:"Verdana","sans-serif"'>Read &amp; Write to bulk
+endpoints:</span></h3>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>osrusbfx2.exe
+-r 64&nbsp; - to read 64 bytes to the bulk in endpoint</span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>osrusbfx2.exe
+-w 64 - to write 64 bytes to the bulk out endpoint</span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>osrusbfx2.exe
+-r 64 -w 64 -c 100 -v &lt;-- This command first writes 64 bytes of data to bulk
+out endpoint (Pipe01), and then reads 64 bytes from bulk-in endpoint (Pipe02),
+and compares the read buffer with write buffer to see if they match. If the
+buffer contents match, it repeats this operation 100 times. </span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>To read
+&amp; write to the device asynchronously in an infinite loop: osrusbfx2.exe -a</span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>The bulk
+endpoints are double buffered. Depending on the operational speed, full or
+high, the buffer size is either 64 bytes or 512 bytes respectively. A request
+to read data wouldn't complete if the buffers are empty. If the buffers are
+full, a request to write data wouldn't complete until the buffers are emptied.
+So when you are doing a synchronous read, you should make sure the endpoint
+buffer has data. Let us see what happen when you send 512 bytes write request,
+when the device is operating in full speed mode. Since the endpoints are double
+buffered, the total buffer capacity is 256 bytes. So the first 256 bytes would
+fill the buffer and the write request will wait in the USB stack until the
+buffers are emptied. So if you run another instance of the application to read
+512 bytes of data, both write and read requests will get completed
+successfully.</span></p>
+
+<h3><span style='font-family:"Verdana","sans-serif"'>Dumping Descriptors:</span></h3>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>osrusbfx2.exe
+-u &lt;-- Will dump all the descriptors and endpoint information. </span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>If the
+device is operating in high speed mode, you will get the following information:</span></p>
+
+<p style='margin-bottom:12.0pt'><span style='font-family:"Verdana","sans-serif"'><br>
+===================<br>
+USB_CONFIGURATION_DESCRIPTOR<br>
+bLength = 0x9, decimal 9<br>
+bDescriptorType = 0x2 ( USB_CONFIGURATION_DESCRIPTOR_TYPE )<br>
+wTotalLength = 0x27, decimal 39<br>
+bNumInterfaces = 0x1, decimal 1<br>
+bConfigurationValue = 0x1, decimal 1<br>
+iConfiguration = 0x4, decimal 4<br>
+bmAttributes = 0xa0 ( USB_CONFIG_BUS_POWERED )<br>
+MaxPower = 0x32, decimal 50<br>
+<br>
+-----------------------------<br>
+USB_INTERFACE_DESCRIPTOR #0<br>
+bLength = 0x9<br>
+bDescriptorType = 0x4 ( USB_INTERFACE_DESCRIPTOR_TYPE )<br>
+bInterfaceNumber = 0x0<br>
+bAlternateSetting = 0x0<br>
+bNumEndpoints = 0x3<br>
+bInterfaceClass = 0xff<br>
+bInterfaceSubClass = 0x0<br>
+bInterfaceProtocol = 0x0<br>
+bInterface = 0x0<br>
+------------------------------<br>
+USB_ENDPOINT_DESCRIPTOR for Pipe00<br>
+bLength = 0x7<br>
+bDescriptorType = 0x5 ( USB_ENDPOINT_DESCRIPTOR_TYPE )<br>
+bEndpointAddress= 0x81 ( INPUT )<br>
+bmAttributes= 0x3 ( USB_ENDPOINT_TYPE_INTERRUPT )<br>
+wMaxPacketSize= 0x49, decimal 73<br>
+bInterval = 0x1, decimal 1<br>
+------------------------------<br>
+USB_ENDPOINT_DESCRIPTOR for Pipe01<br>
+bLength = 0x7<br>
+bDescriptorType = 0x5 ( USB_ENDPOINT_DESCRIPTOR_TYPE )<br>
+bEndpointAddress= 0x6 ( OUTPUT )<br>
+bmAttributes= 0x2 ( USB_ENDPOINT_TYPE_BULK )<br>
+wMaxPacketSize= 0x200, decimal 512<br>
+bInterval = 0x0, decimal 0<br>
+------------------------------<br>
+USB_ENDPOINT_DESCRIPTOR for Pipe02<br>
+bLength = 0x7<br>
+bDescriptorType = 0x5 ( USB_ENDPOINT_DESCRIPTOR_TYPE )<br>
+bEndpointAddress= 0x88 ( INPUT )<br>
+bmAttributes= 0x2 ( USB_ENDPOINT_TYPE_BULK )<br>
+wMaxPacketSize= 0x200, decimal 512<br>
+bInterval = 0x0, decimal 0</span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>If the
+device is operating in low speed mode: </span></p>
+
+<p><span style='font-family:"Verdana","sans-serif"'>===================<br>
+USB_CONFIGURATION_DESCRIPTOR<br>
+bLength = 0x9, decimal 9<br>
+bDescriptorType = 0x2 ( USB_CONFIGURATION_DESCRIPTOR_TYPE )<br>
+wTotalLength = 0x27, decimal 39<br>
+bNumInterfaces = 0x1, decimal 1<br>
+bConfigurationValue = 0x1, decimal 1<br>
+iConfiguration = 0x3, decimal 3<br>
+bmAttributes = 0xa0 ( USB_CONFIG_BUS_POWERED )<br>
+MaxPower = 0x32, decimal 50<br>
+<br>
+-----------------------------<br>
+USB_INTERFACE_DESCRIPTOR #0<br>
+bLength = 0x9<br>
+bDescriptorType = 0x4 ( USB_INTERFACE_DESCRIPTOR_TYPE )<br>
+bInterfaceNumber = 0x0<br>
+bAlternateSetting = 0x0<br>
+bNumEndpoints = 0x3<br>
+bInterfaceClass = 0xff<br>
+bInterfaceSubClass = 0x0<br>
+bInterfaceProtocol = 0x0<br>
+bInterface = 0x0<br>
+------------------------------<br>
+USB_ENDPOINT_DESCRIPTOR for Pipe00<br>
+bLength = 0x7<br>
+bDescriptorType = 0x5 ( USB_ENDPOINT_DESCRIPTOR_TYPE )<br>
+bEndpointAddress= 0x81 ( INPUT )<br>
+bmAttributes= 0x3 ( USB_ENDPOINT_TYPE_INTERRUPT )<br>
+wMaxPacketSize= 0x49, decimal 73<br>
+bInterval = 0x1, decimal 1<br>
+-------</span></p>
+
+<p style='margin-bottom:12.0pt'><span style='font-family:"Verdana","sans-serif"'>-----------------------<br>
+USB_ENDPOINT_DESCRIPTOR for Pipe01<br>
+bLength = 0x7<br>
+bDescriptorType = 0x5 ( USB_ENDPOINT_DESCRIPTOR_TYPE )<br>
+bEndpointAddress= 0x6 ( OUTPUT )<br>
+bmAttributes= 0x2 ( USB_ENDPOINT_TYPE_BULK )<br>
+wMaxPacketSize= 0x40, decimal 64<br>
+bInterval = 0x0, decimal 0<br>
+------------------------------<br>
+USB_ENDPOINT_DESCRIPTOR for Pipe02<br>
+bLength = 0x7<br>
+bDescriptorType = 0x5 ( USB_ENDPOINT_DESCRIPTOR_TYPE )<br>
+bEndpointAddress= 0x88 ( INPUT )<br>
+bmAttributes= 0x2 ( USB_ENDPOINT_TYPE_BULK )<br>
+wMaxPacketSize= 0x40, decimal 64<br>
+bInterval = 0x0, decimal 0</span></p>
+
+<p><span style='font-family:"Verdana","sans-serif"'>&nbsp;</span></p>
+
+<h3><a name="_Unified_tracing"></a><span style='font-family:"Verdana","sans-serif"'>Unified
+tracing</span></h3>
+
+<h3><span style='font-size:11.0pt;font-family:"Verdana","sans-serif"'>On Vista
+and later</span></h3>
+
+<h3><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>To view events the provider manifest will need to be
+installed. As part of the installation do the following; from an elevated
+prompt run:</span></h3>
+
+<h3 style='text-indent:.5in'><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>wevtutil im osrusbfx2.man</span></h3>
+
+<h3><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>Registering the manifest will set up the appropriate paths
+where the system can find information for decoding the events.&nbsp; The OSR
+event log can be found in the system event viewer under “Event
+Viewer\Applications and Services Logs\OSRUSBFx2\Operational channel
+eventlog”.&nbsp; &nbsp;Triggering a <a href="#_Reset_and_Reenumerate">device
+reenumeration</a> through osrusbfx2.exe will send an event to this log.</span></h3>
+
+<h3><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>To trace you can use the inbox tools, logman and tracerpt
+or download <a
+href="http://www.microsoft.com/whdc/system/sysperf/perftools.mspx">XPerf</a>
+(Windows Performance Toolkit) from Microsoft. </span></h3>
+
+<h3><span style='font-size:11.0pt;font-family:"Verdana","sans-serif"'>On XP,
+W2K3</span></h3>
+
+<h3><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>Register the generated mof file osrusbfx2.mof located in
+the $(0) directory.</span></h3>
+
+<h3><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>Mofcomp osrusbfx2.mof</span></h3>
+
+<h3><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>&nbsp;</span></h3>
+
+<h3><span style='font-size:11.0pt;font-family:"Verdana","sans-serif"'>Using
+inbox tools</span></h3>
+
+<h3><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>Using logman to start/stop the trace:</span></h3>
+
+<h3 style='text-indent:.5in'><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>logman start sample -o osrusbfx2.etl -ets -p OSRUSBFX2</span></h3>
+
+<h3 style='text-indent:.5in'><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>Generate some activity like:</span> <span style='font-size:
+10.0pt;font-family:"Verdana","sans-serif";font-weight:normal'>osrusbfx2.exe –a</span>
+<span style='font-size:10.0pt;font-family:"Verdana","sans-serif";font-weight:
+normal'>&nbsp;</span></h3>
+
+<h3 style='text-indent:.5in'><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>Logman stop sample</span></h3>
+
+<h3><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>View the trace file&nbsp; using tracerpt :</span></h3>
+
+<h3 style='text-indent:.5in'><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>tracerpt -of csv OSRUSBFX2.etl</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</h3>
+
+<h3><span style='font-size:11.0pt;font-family:"Verdana","sans-serif"'>&nbsp;</span></h3>
+
+<h3><span style='font-size:11.0pt;font-family:"Verdana","sans-serif"'>Using
+Xperf (Windows Performance Toolkit)</span></h3>
+
+<h3><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>To start/stop the trace:</span></h3>
+
+<h3 style='text-indent:.5in'><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>xperf -start sample -f osrusbfx2.etl -on OSRUSBFX2</span></h3>
+
+<h3 style='text-indent:.5in'><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>Generate some activity like:</span> <span style='font-size:
+10.0pt;font-family:"Verdana","sans-serif";font-weight:normal'>osrusbfx2.exe –a</span>
+<span style='font-size:10.0pt;font-family:"Verdana","sans-serif";font-weight:
+normal'>&nbsp;</span></h3>
+
+<h3 style='text-indent:.5in'><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>xperf -stop sample</span></h3>
+
+<h3><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>View the trace file&nbsp; using xperf:</span></h3>
+
+<h3 style='text-indent:.5in'><span style='font-size:10.0pt;font-family:"Verdana","sans-serif";
+font-weight:normal'>xperfview OSRUSBFX2.etl</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</h3>
+
+<p><span style='font-family:"Verdana","sans-serif"'>&nbsp;</span></p>
+
+</div>
+
+</body>
+
+</html>
+

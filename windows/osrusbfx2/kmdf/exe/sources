@@ -1,0 +1,30 @@
+TARGETNAME=osrusbfx2
+TARGETTYPE=PROGRAM
+
+UMTYPE=console
+UMBASE=0x01000000
+
+_NT_TARGET_VERSION= $(_NT_TARGET_VERSION_WINXP)
+
+# for scanf_s
+USE_MSVCRT=1
+
+!if defined(DDKBUILDENV)
+
+C_DEFINES = $(C_DEFINES) -DBUILT_IN_DDK=1
+
+!endif
+
+INCLUDES=$(DDK_INC_PATH);..\sys\inc
+
+
+TARGETLIBS= $(DDK_LIB_PATH)\usbd.lib \
+            $(SDK_LIB_PATH)\setupapi.lib
+
+SOURCES=      \
+        testapp.c  \
+        dump.c \
+        testapp.rc
+
+TARGET_DESTINATION=wdf
+

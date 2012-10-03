@@ -1,0 +1,11 @@
+TARGETNAME=osrusbfx2
+TARGETTYPE=DRIVER
+
+
+
+INCLUDES = ..\inc\
+
+KMDF_VERSION_MAJOR=1
+
+SOURCES=step2.c 
+

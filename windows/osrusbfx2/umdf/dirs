@@ -1,0 +1,5 @@
+DIRS= \
+     echo_driver \
+     exe \
+     filter \
+     fx2_driver

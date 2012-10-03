@@ -1,0 +1,430 @@
+<html>
+
+<head>
+<meta http-equiv=Content-Type content="text/html; charset=windows-1252">
+<meta name=Generator content="Microsoft Word 12 (filtered)">
+<title>User-Mode OSR USB-FX2 Sample Function Driver</title>
+<style>
+<!--
+ /* Font Definitions */
+ @font-face
+	{font-family:"Cambria Math";
+	panose-1:2 4 5 3 5 4 6 3 2 4;}
+@font-face
+	{font-family:Verdana;
+	panose-1:2 11 6 4 3 5 4 4 2 4;}
+ /* Style Definitions */
+ p.MsoNormal, li.MsoNormal, div.MsoNormal
+	{margin:0in;
+	margin-bottom:.0001pt;
+	font-size:12.0pt;
+	font-family:"Times New Roman","serif";}
+h1
+	{mso-style-link:"Heading 1 Char";
+	margin-right:0in;
+	margin-left:0in;
+	font-size:24.0pt;
+	font-family:"Times New Roman","serif";
+	font-weight:bold;}
+h2
+	{mso-style-link:"Heading 2 Char";
+	margin-right:0in;
+	margin-left:0in;
+	font-size:18.0pt;
+	font-family:"Times New Roman","serif";
+	font-weight:bold;}
+p
+	{margin-right:0in;
+	margin-left:0in;
+	font-size:12.0pt;
+	font-family:"Times New Roman","serif";}
+span.Heading1Char
+	{mso-style-name:"Heading 1 Char";
+	mso-style-link:"Heading 1";
+	font-family:"Cambria","serif";
+	color:#365F91;
+	font-weight:bold;}
+span.Heading2Char
+	{mso-style-name:"Heading 2 Char";
+	mso-style-link:"Heading 2";
+	font-family:"Cambria","serif";
+	color:#4F81BD;
+	font-weight:bold;}
+span.style21
+	{mso-style-name:style21;
+	font-family:"Verdana","sans-serif";}
+.MsoChpDefault
+	{font-size:10.0pt;}
+@page Section1
+	{size:8.5in 11.0in;
+	margin:1.0in 1.0in 1.0in 1.0in;}
+div.Section1
+	{page:Section1;}
+ /* List Definitions */
+ ol
+	{margin-bottom:0in;}
+ul
+	{margin-bottom:0in;}
+-->
+</style>
+
+</head>
+
+<body lang=EN-US link=blue vlink=purple>
+
+<div class=Section1>
+
+<h1><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOSRUSB</span></h1>
+
+<h2><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>SUMMARY</span></h2>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+sample demonstrates how to use the User-Mode Driver Framework to write a driver
+and shows best practices. In demonstrates the use of a default Parallel
+Dispatch I/O Queue and its request-start events and cancellation events. It
+also demonstrates how to communicate with a device by using a USB I/O target
+and how to handle cancellation, completion and cleanup requests. </span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+driver loads on and controls the OSR USB-FX2 Learning Kit device from <a
+href="http://www.osronline.com">OSR</a>.&nbsp; More information about the
+programming model for the device can be found <a
+href="http://www.osronline.com/hardware/OSRFX2_32.pdf">here</a>.&nbsp; It uses
+the WUDF USB I/O target to send USB requests to the device.&nbsp; This sample
+driver is a minimal driver meant to demonstrate the usage of the User-Mode
+Driver Framework. It is not intended for use in a production environment.</span></p>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width="100%"
+ style='width:100.0%;background:#CCCCCC;border-collapse:collapse' id=table2>
+ <tr>
+  <td width=60 style='width:45.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p><strong><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Note:</span></strong></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+  sample requires installation of WinUsb runtime on Windows XP and would not
+  work without that. Please check WinUsb documentation if WinUsb runtime is
+  available for XP and how to install it.</span></p>
+  </td>
+ </tr>
+</table>
+
+<p><b><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>BUILDING
+THE SAMPLE</span></b></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Start a
+build environment window as described under<b> <a
+href="../../readme.htm#buildenv">Building and Testing the Samples</a> </b>the
+UMDF Readme file.</span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Change to the
+directory containing the device source code, such as &quot;CD c:\WINDDK\&lt;build
+number&gt;\src\usb\<span class=style21>osrusbfx2\umdf</span>\echo_driver&quot;
+(the WINDDK location and build number may vary).</span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Run build
+-ceZ, or use the macro BLD. This command invokes the Microsoft make routines to
+build the components. If the build succeeds, you will find the driver,
+WUDFOsrUsbDriver.dll in the binary output directory specified for the build
+environment. You can get the output path from the buildxxx.log f ile. If it
+fails you can find errors and warnings in the build error (.err) and warning
+(.wrn) log files respectively (buildfre_wlh_x86.err for example). </span></p>
+
+<h2><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>INSTALLATION</span></h2>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>To test
+the sample you will need to setup your test system as described <b><a
+href="../../readme.htm#buildenv">Building and Testing the Samples</a> </b>the
+UMDF Readme file.</span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>You will
+also need to copy the co-installer for the Kernel-Mode Driver Framework into
+the directory with your driver binary and INF (and include it in the catalog
+file if you're signing the driver package).&nbsp; This sample driver makes use
+of WinUSB, which is a KMDF based driver and so requires the KMDF co-installer
+for proper installation. </span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+sample's INF allows you to install the driver on the OSR USB-FX2 Learning Kit
+board from <a href="http://www.osronline.com">OSR</a>.&nbsp; </span></p>
+
+<blockquote style='margin-top:5.0pt;margin-bottom:5.0pt'>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>To install
+the USB-FX2 echo driver on Windows XP (Sp2 and above), Vista and later
+operating systems:</span></p>
+
+<ol start=1 type=1>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Copy
+     the driver binary (WUDFOsrUsbDriver.dll) and the WUDFOsrUsbDriver.inf file
+     to a directory on your test machine (for example c:\usbSample).</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Copy
+     the UMDF coinstaller bianry WUDFUpdate_01009.dll from
+     c:\winddk\&lt;bld&gt;\redist\wdf\&lt;arch&gt; directory of the WDK into
+     the directory used above.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Copy
+     the KMDF coinstaller binary WdfCoinstaller01009.dll from the
+     c:\winddk\&lt;build_number&gt;\redist\wdf\&lt;arch&gt; directory of the
+     WDK into the directory used above. This is needed because this sample uses
+     USB I/O targets which use WinUsb runtime which includes a KMDF driver.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Attach
+     the OSR USB-FX2 device to your computer.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>At
+     the &quot;Welcome to the Found New Hardware Wizard&quot; choose &quot;No,
+     not this time&quot; and click Next.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Select
+     &quot;Install from a list or specific location (Advanced)&quot; and click
+     Next.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Select
+     &quot;Search for the best driver in these locations&quot;.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Clear
+     the &quot;Search removable media (floppy, CD-ROM ...)&quot; check box.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Select
+     the &quot;Include this location in the search&quot; check box.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Enter
+     the path to the files (for example: c:\usbSample) under that check box and
+     click Next.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Click
+     Finish at 'Completing the Found New Hardware Wizard.'</span></li>
+</ol>
+
+</blockquote>
+
+<table class=MsoNormalTable border=1 cellspacing=0 cellpadding=0 width="100%"
+ style='width:100.0%;background:#CCCCCC;border-collapse:collapse' id=table2>
+ <tr>
+  <td width=60 style='width:45.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Note:</span></p>
+  </td>
+  <td style='padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Between
+  steps 8 and 9 you may see a &quot;Please select the best match for your
+  hardware from the list below&quot; page.&nbsp; This happens when there are
+  multiple INFs which match your hardware.&nbsp; If this happens you should
+  select an entry with &quot;<b>Microsoft OSR USB Driver</b>&quot; in the
+  'Description' column and the directory which holds the INF (for example
+  c:\usbSample) in the 'Location' column.&nbsp; If you have multiple versions
+  of an INF in that directory, you may also need to check the 'Version' column
+  to find the highest version number.</span></p>
+  <p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Occasionally
+  you may be told that no newer driver could be found for your device in this
+  case.&nbsp; If that should happen use the alternate installation instructions
+  below.</span></p>
+  </td>
+ </tr>
+</table>
+
+<blockquote style='margin-top:5.0pt;margin-bottom:5.0pt'>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Alternately
+you may use DevCon to install the sample driver for the OSR USB device:</span></p>
+
+<ol start=1 type=1>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Copy
+     the driver binary (WUDFOsrUsbDriver.dll) and the WUDFOsrUsbDriver.inf file
+     to a directory on your test machine (for example c:\usbSample).</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Copy
+     the UMDF coinstaller bianry WUDFUpdate_01009.dll from
+     c:\winddk\&lt;bld&gt;\redist\wdf\&lt;arch&gt; directory of the WDK into
+     the directory used above.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Copy
+     the KMDF coinstaller binary WdfCoinstaller01009.dll from the
+     c:\winddk\&lt;build_number&gt;\redist\wdf\&lt;arch&gt; directory of the
+     WDK into the directory used above. This is needed because this sample uses
+     USB I/O targets which use WinUsb runtime which includes a KMDF driver.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Attach
+     the OSR USB-FX2 device to your computer.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>At
+     the &quot;Welcome to the Found New Hardware Wizard&quot; click Cancel.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Change
+     to the directory containing the inf and binaries (for example <b>cd /d
+     c:\usbSample</b>.)</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Run
+     devcon.exe as follows:<br>
+     <br>
+     </span><span style='font-size:10.0pt;font-family:"Courier New"'>devcon.exe
+     update WUDFOsrUsbDriver.inf &quot;USB\Vid_0547&amp;Pid_1002&quot;</span><span
+     style='font-size:10.0pt;font-family:"Verdana","sans-serif"'> <br>
+     (note: the quotes are important because of the &amp;)<br>
+     <br>
+     DevCon can be found in the tools directory of your WDK enlistment (for
+     example: d:\winddk\tools\devcon\i386\devcon.exe.)</span></li>
+</ol>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>To update
+the sample driver after making any changes:</span></p>
+
+<ol start=1 type=1>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Increment
+     the version number found in the INF.&nbsp; While this is not strictly
+     necessary, it will help ensure PnP selects your new driver as a better
+     match for the device.</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Copy
+     the driver binary and the WUDFOsrUsbDriver.inf file to a directory on your
+     test machine (for example c:\usbSample).</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Follow
+     instruction 4 above</span></li>
+ <li class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Follow
+     instruction 5 above, using the update command rather than the install
+     command</span></li>
+</ol>
+
+</blockquote>
+
+<h2><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>CODE TOUR</span></h2>
+
+<table class=MsoNormalTable border=1 cellpadding=0 width="75%"
+ style='width:75.0%' id=table1>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>File
+  Manifest</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>File
+  Description</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Usb.htm</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Documentation
+  for this sample (this file).</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>comsup.cpp
+  &amp; comsup.h</span></p>
+  </td>
+  <td width=604 style='width:453.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>COM
+  Support code - specifically base classes which provide implementations for
+  the standard COM interfaces IUnknown and IClassFactory which are used
+  throughout the sample.</span></p>
+  <p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>The
+  implementation of IClassFactory is designed to create instances of the
+  CMyDriver class. If you should change the name of your base driver class, you
+  would also need to modify this file.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>dllsup.cpp</span></p>
+  </td>
+  <td width=604 style='width:453.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>DLL
+  Support code - provides the DLL's entry point as well as the single required
+  export (DllGetClassObject).</span></p>
+  <p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>These
+  depend on comsup.cpp to perform the necessary class creation.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>exports.def</span></p>
+  </td>
+  <td width=604 style='width:453.0pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+  file lists the functions that the driver DLL exports.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>internal.h</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+  is the main header file for the sample driver. </span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>driver.cpp
+  &amp; driver.h</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Definition
+  and implementation of the driver callback class (CMyDriver) for the sample. </span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>device.cpp
+  &amp; driver.h</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Definition
+  and implementation of the device callback class (CMyDriver) for the sample.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>queue.cpp
+  &amp; queue.h</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Definition
+  and implementation of the queue callback class (CMyQueue) for the sample.
+  This file also contains the code that invokes the USB I/O target. </span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>osrusbdriver.rc</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>This
+  file defines resource information for the sample driver.</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>sources</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Generic
+  file that lists source files and all the build options</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>WUDFOsrUsbDriver.inf</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>Sample
+  INF for installing the sample driver to control the OSR USB-FX2 Learning Kit
+  device</span></p>
+  </td>
+ </tr>
+ <tr>
+  <td width=161 style='width:120.75pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>osrusbdriver.ctl</span></p>
+  </td>
+  <td width=766 style='width:574.5pt;padding:.75pt .75pt .75pt .75pt'>
+  <p class=MsoNormal><span style='font-size:10.0pt'>This file lists the WPP
+  trace control GUID(s) for the sample driver. This file can be used with the
+  tracelog command's -guid flag to enable the collection of these trace events
+  within an established trace session.</span></p>
+  <p><span style='font-size:10.0pt'>These GUIDs must remain in sync with the
+  trace control guids defined in internal.h</span></p>
+  </td>
+ </tr>
+</table>
+
+<p align=center style='text-align:center'><span style='font-size:10.0pt;
+font-family:"Verdana","sans-serif"'><a href="#top">Top of Page</a></span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>© 2005
+Microsoft Corporation</span></p>
+
+<p><span style='font-size:10.0pt;font-family:"Verdana","sans-serif"'>&nbsp;</span></p>
+
+</div>
+
+</body>
+
+</html>
+

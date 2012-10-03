@@ -1,0 +1,57 @@
+TARGETNAME=osrusbfx2
+TARGETTYPE=DRIVER
+
+
+KMDF_VERSION_MAJOR=1
+
+INF_NAME=osrusbfx2
+NTTARGETFILE1=$(OBJ_PATH)\$(O)\$(INF_NAME).inf
+PASS1_BINPLACE=$(NTTARGETFILE1)
+         
+               
+PASS2_BINPLACE=$(OBJ_PATH)\$(O)\osrusbfx2.mof \
+               osrusbfx2.man  
+
+INCLUDES=$(INCLUDES);..\inc
+
+TARGETLIBS= $(DDK_LIB_PATH)\ntstrsafe.lib
+
+SOURCES=driver.c \
+        device.c \
+        ioctl.c \
+        bulkrwr.c \
+        Interrupt.c \
+        osrusbfx2.rc
+
+#
+# Comment the below line to disable tracing. All the debug traces
+# will be sent to the kernel-debugger.
+#ENABLE_EVENT_TRACING=1
+
+!IFDEF ENABLE_EVENT_TRACING
+
+C_DEFINES = $(C_DEFINES) -DEVENT_TRACING
+
+#
+# Generate WPP tracing code
+# $(SOURCES)   -- run software preprocessor on files listed in SOURCES
+# -km          -- use kernel mode
+# -func        -- define function we'll use for tracing
+#                 This would map all TraceEvents calls to 
+#                 DoTraceMessage.
+#
+RUN_WPP= $(SOURCES)                             \
+         -km                                    \
+         -func:TraceEvents(LEVEL,FLAGS,MSG,...) \
+         -gen:{km-WdfDefault.tpl}*.tmh       
+!ENDIF
+
+
+NTTARGETFILE0=$(OBJ_PATH)\$(O)\fx2Events.h
+
+
+TARGET_DESTINATION=wdf
+
+# Temporarily excuse usage of serviceability impairing macros in code...
+ALLOW_DATE_TIME=1
+
