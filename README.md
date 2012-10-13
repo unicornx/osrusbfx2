@@ -1,4 +1,4 @@
 osrfx2
 ======
 
-Some USB driver code sample for learning writing host drivers for USB devices.
+Based on MS WDK osrfx2 samples, add more with my idea to demo learning writing host drivers for USB devices.
