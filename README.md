@@ -21,7 +21,7 @@ Based on MS WDK osrusbfx2 samples + CY001 learning board, added more with my ide
 # 联系方式
 unicorn_wang@outlook.com
 
-p.s. 该项目已经上传到GitHub，大家如果熟悉GitHub也可以上Github观赏并联机提出宝贵意见。
+p.s. 该项目已经上传到GitHub，大家如果熟悉GitHub也可以上Github观赏并联机提出宝贵意见。地址是: https://github.com/unicornx/osrusbfx2
 
 下载该项目的方法：
 
