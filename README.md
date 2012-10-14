@@ -27,7 +27,7 @@ p.s. 该项目已经上传到GitHub，大家如果熟悉GitHub也可以上Github
 
 mkdir yourworkspacefolder  
 cd yourworkspacefolder  
-git clone https://github.com/unicornx/osrfx2.git
+git clone https://github.com/unicornx/osrusbfx2.git
 
 enjoy it! :)
 
