@@ -1,6 +1,6 @@
 #osrusbfx2
 
-Based on MS WDK osrusbfx2 samples + CY001 learning board, add more with my idea to demo learning writing host drivers for USB devices.
+Based on MS WDK osrusbfx2 samples + CY001 learning board, added more with my idea to demo learning writing host drivers for USB devices.
 
 # 为何要写这个东东
 诸位学习主机（host）侧USB驱动开发的同仁，想必在学习过程中一定也有鄙人相同的经历感受。那就是手头如果有一块USB的开发学习板，那效率一定会高很多。所以在下当时也是出于此目的在网上买了张佩大侠提供的配合《竹林蹊径：深入浅出windows驱动开发》的学习板CY001，以作学习的用途。
