@@ -23,7 +23,10 @@ unicorn_wang@outlook.com
 
 p.s. 该项目已经上传到GitHub，大家如果熟悉GitHub也可以上Github观赏并联机提出宝贵意见。地址是: https://github.com/unicornx/osrusbfx2
 
-下载该项目的方法：
+该项目另一个发布的平台在“驱动开发网” - "基于WDK的OSRUSBFX2写了点例子代码，有兴趣的可以看看"
+http://bbs3.driverdevelop.com/read.php?tid-125258.html
+
+# 下载该项目的方法：
 
 mkdir yourworkspacefolder  
 cd yourworkspacefolder  
