@@ -25,7 +25,8 @@ drvInst.exe /p osrusbfx2.inf, to obtain the path to the installed osrusbfx2.inf
 drvInst.exe /u osrusbfx2.inf, to uninstall devices from the devnodes no matter if they are presented or not and uninstall driver package after that.
     
 # 为何要写这个东东
-作为osrusbfx2例子的一部分，驱动和设备的安装也是一个十分重要的主题。（TBD）
+作为osrusbfx2例子的一部分，驱动和设备的安装也是一个十分重要的主题。
+更详细的教程请看[device-and-driver-installation.md](./device-and-driver-installation.md)
 
 # 目录结构
 
