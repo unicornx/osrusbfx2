@@ -138,7 +138,7 @@ _tmain(
     
     DIFXAPISetLogCallback( LogCallback, (PVOID)NULL );
     
-	Ret = ERROR_SUCCESS;
+    Ret = ERROR_SUCCESS;
 
     if ( TEXT('u') == Option )
     {
@@ -177,6 +177,22 @@ _tmain(
     {
         _tprintf( TEXT("DRVINST: installing drivers.\n"));
         
+        /* http://msdn.microsoft.com/en-us/library/windows/hardware/ff552293(v=vs.85).aspx
+           
+        */
+        
+        // step1 - Checking for In-Progress Installations
+        if ( WAIT_OBJECT_0 != CMP_WaitNoPendingInstallEvents ( 0 ) ) {
+        	_tprintf( TEXT("ERROR: There are pending installation activities or some error happened when checking CMP_WaitNoPendingInstallEvents\n") );
+					goto final_main;
+        }
+        
+        /*
+           step2 - Determine whether a device is plugged in.
+           step3 - Preinstall driver packages
+        	 If we use DIFx API, will save our time, otherwise we must follow the MSDN regarding step2 and step3
+        	 
+        */
         Ret = DriverPackageInstall( 
                     DriverPackageInfPath, 
                     Flags,
@@ -197,7 +213,6 @@ _tmain(
         if (NeedRebootDrvPkg){
             _tprintf( TEXT("INFO: Machine will have to be rebooted to complete install.") );
         }
-        
     }
     else if ( TEXT('g') == Option )
     {  
@@ -211,7 +226,8 @@ _tmain(
     } else {
         _tprintf( TEXT("ERROR: invalid command line option /%c.\n"), Option );
     }
-    
+
+final_main:
     DIFXAPISetLogCallback( NULL, (PVOID)NULL );
     
     return 1;
