@@ -12,7 +12,7 @@ Based on MS WDK osrusbfx2 samples + CY001 learning board, added more with my ide
 再接下来就有了这个项目。所以如果你手头有CY001，又想学习WDK的OSRUSBFX2，那不妨试试阅读以下我写的这个玩意。其实在设备（Device）侧，如果你没有CY001，但只要有任何一块基于Cypress的FX2系列USB芯片的学习开发板（大陆做这种开发板的貌似不少，淘宝上可以搜搜），同时你对修改设备的固件也有兴趣，都可以按照相同的思路尝试以下。我的这个就当是抛砖引玉了吧。
 
 # 目录结构
-* osrfx2fw - CY001的固件Keil工程源代码。已经过修改模拟OSRFX2学习板
+* osrfx2fw - CY001的固件Keil工程源代码。已经过修改模拟OSRFX2学习板 [README](./osrfx2fw/README.md)
 * windows  - Windows版本的OSRUSBFX2的源代码。已经过修改以适配CY001与实际的OSRFX2学习板的不同。
 * linux - 鄙人正在研究Linux上的OSRFX2，如果有更新会放上来。（TBD）
 
