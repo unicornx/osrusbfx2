@@ -13,7 +13,11 @@ Based on MS WDK osrusbfx2 samples + CY001 learning board, added more with my ide
 
 # 目录结构
 * osrfx2fw - CY001的固件Keil工程源代码。已经过修改模拟OSRFX2学习板 [README](./osrfx2fw/README.md)
-* windows  - Windows版本的OSRUSBFX2的源代码。已经过修改以适配CY001与实际的OSRFX2学习板的不同。
+* windows  - Windows版本的源代码和相关文件。已经过修改以适配CY001与实际的OSRFX2学习板的不同。
+ * drivers - 驱动安装包。目前只提供了x86的版本。[README](./windows/drivers/README.md)
+ * drvinst - 驱动安装和卸载程序，演示DIFxAPI和SetupAPI的典型用例。[README](./windows/drvinst/README.md)
+ * osrusbfx2 - WDK的osrusbfx2例子，经过修改适配CY001。[README](./windows/osrusbfx2/README.md)
+
 * linux - 鄙人正在研究Linux上的OSRFX2，如果有更新会放上来。（TBD）
 
 更详细的说明可以参考各分目录下的说明README.md
