@@ -14,7 +14,9 @@ MSDN上有关知识点和一些基本概念的介绍分散在各个章节里，�
 
 # 2. Windows上设备以及驱动安装的相关模块
 
-（经典的关系图） [Device Installation Components (Windows Drivers)]
+![经典的关系图](http://i.msdn.microsoft.com/dynimg/IC534860.png)
+
+摘录自[Device Installation Components (Windows Drivers)]
 
 驱动和设备安装中涉及到的模块由两大部分组成。一部分是由IHV和OEM提供，另外一部分由Windows操作系统提供
 
