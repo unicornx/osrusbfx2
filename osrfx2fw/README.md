@@ -3,7 +3,11 @@
 
 # 参考文献
 
-[Using the OSR USB FX-2 Learning Kit - OSR Online] : OSRUSBFX2学习板的DataSheet
+1. [Using the OSR USB FX-2 Learning Kit - OSR Online] : OSRUSBFX2学习板的DataSheet
+
+2. [CY3684 EZ-USB FX2LP Development Kit] : \Cypress\USB\Examples\FX2LP\Bulkloop
+
+3. CY001 (FirmWare) 源代码
 
 # 为何要写这个东东
 诸位学习主机（host）侧USB驱动开发的同仁，想必在学习过程中一定也有鄙人相同的经历感受。那就是手头如果有一块USB的开发学习板，那效率一定会高很多。所以在下当时也是出于此目的在网上买了张佩大侠提供的配合《竹林蹊径：深入浅出windows驱动开发》的学习板CY001，以作学习的用途。
@@ -12,9 +16,11 @@
 
 接下来，众所周知的原因，对于中国大陆的程序员来说OSR的那块板子实在是贵了点。所以我手上有了CY001之后就有了个想法：能不能将CY001改造一下，模拟成OSRFX2呢。它们两的物理基础实际上相差并不大啊。
 
-再接下来就有了这个项目。所以如果你手头有CY001，又想学习WDK的OSRUSBFX2，那不妨试试阅读以下我写的这个玩意。其实在设备（Device）侧，如果你没有CY001，但只要有任何一块基于Cypress的FX2系列USB芯片的学习开发板（大陆做这种开发板的貌似不少，淘宝上可以搜搜），同时你对修改设备的固件也有兴趣，都可以按照相同的思路尝试以下。我的这个就当是抛砖引玉了吧。
+再接下来就有了这个项目。所以如果你手头有CY001，又想学习WDK的OSRUSBFX2，那不妨试试阅读以下我写的这个玩意。其实在设备（Device）侧，如果你没有CY001，但只要有任何一块基于Cypress的FX2系列USB芯片的学习开发板,同时你对修改设备的固件也有兴趣，都可以按照相同的思路尝试一下。我的这个就当是抛砖引玉了吧。（大陆做这种开发板的貌似不少，淘宝上可以搜搜。而且你对调试固件很感兴趣的话，我建议你买一块带串口接口的开发板。在改写CY001的固件代码的时候我就是用了另一块带串口的FX2开发板，CY001只能支持hex文件下载方式运行，对调试固件还是有点麻烦，但CY001的优点是它支持的小设备比较接近OSRFX2，而且做工也的确不错:)）
 
 # 基于CY001模拟OSRUSBFX2
+![CY001的器件图说明](./doc/img/cy001-1.PNG)
+
 对照[Using the OSR USB FX-2 Learning Kit - OSR Online], 结合CY001做的主要改动总结：
 
 - **1.Configurations**： 与OSRFX2保持一致
@@ -56,6 +62,7 @@ git clone https://github.com/unicornx/osrusbfx2.git
 enjoy it! :)
 
 [Using the OSR USB FX-2 Learning Kit - OSR Online]: http://www.osronline.com/hardware/osrfx2_32.pdf
+[CY3684 EZ-USB FX2LP Development Kit]: http://www.cypress.com/?rID=14321
       
 
 
