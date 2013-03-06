@@ -32,8 +32,8 @@
 
 - **4.Board LED Displays**: 
 
- - ***4.1 7-Segment LED display***: CY001上也有，与OSRFX2保持一致
- - ***4.2 LED Bar Graph Display***： CY001上只有4个，而OSRFX2上有8个
+ - ***4.1 7-Segment LED display***: CY001上也有，与OSRFX2保持一致。该器件的功能在CY001上目前还未实现。
+ - ***4.2 LED Bar Graph Display***： CY001上只有4个，而OSRFX2上有8个。设置(SET)CY001的LED bar的接口这里和OSRFX2是不一样的。OSRFX2使用了一个8位的BYTE，每一位的1或者0代表了每个LED灯的开或者关。在CY001上我们稍有不同，同样使用了一个8位的BYTE，最高位为状态位，只在设置(SET)时使用。1标志为点亮，0为关闭，其他的低4位标识了LED bar的索引。在读取(GET)LED bar的状态时，CY001和OSRFX2是一致的，唯一的区别仅仅为CY001只使用低4位，每一位1标志为该LED点亮，0为关闭。
 
 - **5.Vendor Commands**:
 
