@@ -22,6 +22,7 @@ Author         Date       Tracking Number  Description of Change
 --------------+----------+---------------+--------------------------------------
 unicornx       June/2012  N/A             modified to work with CY001 dev board
 unicornx       July/2012  N/A             added filter drv to get dev info
+unicornx       Mar/2013   N/A             redefined bar graph structure
 --*/
 
 #ifndef _PUBLIC_H
@@ -53,12 +54,14 @@ DEFINE_GUID(GUID_DEVINTERFACE_OSRUSBFX2FILTER,
 //  bit corresponding to one of the bar graph on the 
 //  OSRFX2 Development Board
 //
-// By unicornx:
 // Modified this structure to adpator to CY001
+// Refer to icd.h of osrfx2fw "LED Bar Graph" section
+// to get more details
+//
 #include <pshpack1.h>
 
-#define BARGRAPH_FLAGLIGHT (UCHAR)0x01
-#define BARGRAPH_FLAGCLEAR (UCHAR)0x00
+#define BARGRAPH_ON  (UCHAR)0x80
+#define BARGRAPH_OFF (UCHAR)0x00
 
 #define BARGRAPH_MAXBAR (UCHAR)4 // CY001 only have 4 LED bars availabe
 
@@ -136,6 +139,7 @@ typedef struct _SWITCH_STATE {
 //
 // Refer to icd.h of osrfx2fw
 // "Mouse Position tracking simulation" section
+// to get more details
 //
 typedef UCHAR MOUSE_STATE, *PMOUSE_STATE;
 

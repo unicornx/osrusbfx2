@@ -10,6 +10,15 @@
 //-----------------------------------------------------------------------------
 // Copyright 2003, Cypress Semiconductor Corporation
 //-----------------------------------------------------------------------------
+/*
+Revision History:
+Author         Date       Tracking Number  Description of Change
+--------------+----------+---------------+--------------------------------------
+unicornx       June/2012  N/A             Initial version
+unicornx       Mar/2013   N/A             Changed definition for Bar Graph
+
+*/
+
 #pragma NOIV               // Do not generate interrupt vectors
 
 #include "fx2.h"
@@ -59,6 +68,8 @@ void BG_Init ( void )
 // Set Bar Graph Display
 void BG_Set ( void )
 {
+    BYTE temp = 0x00;
+
 	EP0BCH=0;
 	SYNCDELAY;
 	EP0BCL=1;
@@ -66,13 +77,14 @@ void BG_Set ( void )
 
 	EZUSB_Delay(100); // have to set delay here to light
 
-	if ( EP0BUF[0] & BARGRAPH_SET_FLAGLIGHT )// ON
+	temp = EP0BUF[0] << 4;
+	if ( EP0BUF[0] & BARGRAPH_ON )// ON
 	{
-		IOD = IOD & ( ~(EP0BUF[0] & 0xF0) ); // upper 4Pin
+        IOD = IOD & ( ~(temp & 0xF0) ); // upper 4Pin
 	}
 	else   // OFF
 	{	
-		IOD = IOD | ( EP0BUF[0] & 0xF0 ); //  below 4Pin
+        IOD = IOD | ( temp & 0xF0 ); //  below 4Pin
 	}
 
 	curLEDs = ~(IOD >> 4);

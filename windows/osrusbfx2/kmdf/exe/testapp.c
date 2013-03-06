@@ -19,11 +19,12 @@ Environment:
 
     user mode only
 
-Modification tracking:
+Revision History:
 Author         Date       Tracking Number  Description of Change
 --------------+----------+---------------+--------------------------------------
 unicornx       June/2012  N/A             modified to work with CY001 dev board
 unicornx       July/2012  N/A             added one filter drv
+unicornx       Mar/2013   N/A             redefined bar graph
 --*/
 
             
@@ -620,10 +621,10 @@ PlayWithDevice()
             goto Error;
         }
 
-        bar = bar - 1  + ( 8 - BARGRAPH_MAXBAR )  ; // normalize to correct offset
-
-		barGraphState.BarsAsUChar = BARGRAPH_FLAGLIGHT;
-		barGraphState.BarsAsUChar |=  ( 1 << (UCHAR)bar );
+        bar--; // normalize to 0 to 3
+        
+        barGraphState.BarsAsUChar = 1 << (UCHAR)bar;
+		barGraphState.BarsAsUChar |= BARGRAPH_ON;
 
         if (!DeviceIoControl(deviceHandle,
                              IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY,
@@ -659,25 +660,53 @@ PlayWithDevice()
             goto Error;
         }
 
-		bar = bar - 1  + ( 8 - BARGRAPH_MAXBAR )  ; // normalize to correct offset
-		barGraphState.BarsAsUChar = BARGRAPH_FLAGCLEAR;
-		barGraphState.BarsAsUChar |=  ( 1 << (UCHAR)bar );
+		bar--;
 
-        printf("Clearing it\n");
+        //
+        // Read the current state
+        //
         if (!DeviceIoControl(deviceHandle,
-                             IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY,
-                             &barGraphState,         // Ptr to InBuffer
-                             sizeof(BAR_GRAPH_STATE), // Length of InBuffer
-                             NULL,             // Ptr to OutBuffer
-                             0,            // Length of OutBuffer
+                             IOCTL_OSRUSBFX2_GET_BAR_GRAPH_DISPLAY,
+                             NULL,             // Ptr to InBuffer
+                             0,            // Length of InBuffer
+                             &barGraphState,           // Ptr to OutBuffer
+                             sizeof(BAR_GRAPH_STATE),  // Length of OutBuffer
                              &index,        // BytesReturned
-                             0)) {          // Ptr to Overlapped structure
+                             0)) {         // Ptr to Overlapped structure
 
             code = GetLastError();
 
             printf("DeviceIoControl failed with error 0x%x\n", code);
 
             goto Error;
+        }
+
+        if (barGraphState.BarsAsUChar & (1 << bar)) {
+
+            printf("Bar is set...Clearing it\n");
+            barGraphState.BarsAsUChar = BARGRAPH_OFF; // reset and flag off
+			barGraphState.BarsAsUChar |= 1 << bar;
+
+            if (!DeviceIoControl(deviceHandle,
+                                 IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY,
+                                 &barGraphState,         // Ptr to InBuffer
+                                 sizeof(BAR_GRAPH_STATE), // Length of InBuffer
+                                 NULL,             // Ptr to OutBuffer
+                                 0,            // Length of OutBuffer
+                                 &index,        // BytesReturned
+                                 0)) {          // Ptr to Overlapped structure
+
+                code = GetLastError();
+
+                printf("DeviceIoControl failed with error 0x%x\n", code);
+
+                goto Error;
+
+            }
+
+        } else {
+
+            printf("Bar not set.\n");
 
         }
 
@@ -685,7 +714,7 @@ PlayWithDevice()
 
         case LIGHT_ALL_BARS:
 
-        barGraphState.BarsAsUChar = 0xF1;
+        barGraphState.BarsAsUChar = 0x8F;
 
         if (!DeviceIoControl(deviceHandle,
                              IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY,
@@ -707,7 +736,7 @@ PlayWithDevice()
 
         case CLEAR_ALL_BARS:
 
-        barGraphState.BarsAsUChar = 0xF0;
+        barGraphState.BarsAsUChar = 0x0F;
 
         if (!DeviceIoControl(deviceHandle,
                              IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY,

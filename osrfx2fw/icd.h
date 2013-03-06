@@ -3,15 +3,22 @@
    Contents:  Interface Control Description
               Specific for CY001 dev board only
               This document is used to describe the board interface. Driver
-              writers and application writers should refer this.
+              writers and Application writers should refer this.
  $Archive:  $
  $Date:  $
  $ $
 
    Copyright (c) , All rights reserved
+
+Revision History:
+Author         Date       Tracking Number  Description of Change
+--------------+----------+---------------+--------------------------------------
+unicornx       June/2012  N/A             Initial version
+unicornx       Mar/2013   N/A             Changed definition for Bar Graph
+
 -----------------------------------------------------------------------------*/
-#ifndef ICD_H //Header entry
-#define ICD_H
+#ifndef _ICD_H //Header entry
+#define _ICD_H
 
 //-----------------------------------------------------------------------------
 // Define the vendor commands supported by our device
@@ -28,23 +35,27 @@
 
 
 /*-----------------------------------------------------------------------------
-	LED Bar Graph
-	For OSRFX2 learning kit, there are 8 LED bars, but for CY001, it only has 4
+ LED Bar Graph
+ For OSRFX2 learning kit, there are 8 LED bars, but for CY001, it only has 4
   
-	To set the bars, use 8-bits to set 4 LED bars state (light on/off)
-  bit 7 ~ 4 indicates the LED bar index, bit-7 is bar-1 and so on
-  bit 0 indicates light on or off, 1 is on, 0 is off
-  
-	To get the bars state, another 8-bits is used, format is the same as OSRFX2 board
-  bit-3 ~ bit-0 represents bar-4 ~ bar-1
------------------------------------------------------------------------------*/
-#define BARGRAPH_SET_FLAGLIGHT 0x01
-#define BARGRAPH_SET_FLAGCLEAR 0x00
+ To set the bars, use 8-bits to set 4 LED bars state (light on/off)
+ bit: | 7     | 6   | 5   | 4   | 3     | 2     | 1     | 0
+ -----+-------+-----+-----+-----+-------+-------+-------+-------
+ def: | state | n/a | n/a | n/a | bar-4 | bar-3 | bar-2 | bar-1
 
-#define BARGRAPH_SET_LED1_ON  0x80
-#define BARGRAPH_SET_LED2_ON  0x40
-#define BARGRAPH_SET_LED3_ON  0x20
-#define BARGRAPH_SET_LED4_ON  0x10
+ bit 0 ~ 3 indicates the LED bar index, bit0 is bar1 and so on.
+ bit 4 ~ 6 are not used due to CY001 only has 4 LED bars.
+ bit 7 indicates light status, on or off, 1 is on, 0 is off. This bit is only used for set.
+
+ Note: this definition is a bit differnet against OSRFX2. OSRFX2 uses 8 bit to
+ represent 8 LED bars, for every bit, 1 means switch on the bar, 0 means switch off it.
+ For CY001, we use bit 0 ~ 3 to flag which bar would be affected, and use bit 7 to
+ flag the operation type - off or on.
+
+ -----------------------------------------------------------------------------*/
+#define BARGRAPH_ON  0x80
+#define BARGRAPH_OFF 0x00
+
 
 /*-----------------------------------------------------------------------------
   Mouse Position tracking simulation
@@ -58,4 +69,5 @@
 #define MOUSEMOV_LEFT  0x04
 #define MOUSEMOV_RIGHT 0x08
 
-#endif // ICD_H
+#endif // _ICD_H
+
