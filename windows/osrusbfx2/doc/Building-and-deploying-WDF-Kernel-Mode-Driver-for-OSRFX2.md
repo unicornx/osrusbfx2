@@ -87,20 +87,21 @@ KMDF驱动程序运行在内核态，为了让用户态的应用程序APP能够�
 然后在EvtDeviceAdd回调函数中调用[WdfDeviceCreateDeviceInterface]即可  
 `status = WdfDeviceCreateDeviceInterface(device,(LPGUID) &GUID_DEVINTERFACE_OSRUSBFX2,NULL);// Reference String`  
 
-# Step3 - I/O控制之Vendor Request Command
+# Step3 - USB控制传输.
 
 在继续Step3和Step4之前，我们要先理解一些KMDF驱动中处理I/O Requests相关的概念。详细的描述可以参考[Handling I/O Requests in KMDF Drivers]。
 
-## *注册I/O控制的处理*
+[Framework Request Objects] - I/O请求对象，是设计为表示I/O Manager发送给驱动的I/O请求。每个I/O请求封装了一个WDM的I/O Request packet,或者简称为IRP。基于WDF写的驱动一般不需要直接访问IRP结构，而是通过调用[Framework Request Objects]提供的成员函数对其进行操作。
+
+[Framework Queue Objects] - I/O队列对象，是设计为表示用来缓存I/O请求对象的队列。为了简化驱动程序员编写WDM驱动的工作量和处理并行I/O事件，串行I/O事件的复杂性，WDF抽象出了I/O队列的概念来接收驱动需要处理的IO请求。对每个设备可以创建一个或多个队列。FrameWork为I/O队列类定义了一个回调函数的集合，WDF称之为[Request Handlers]。我们可以选取我们部分回调函数并加入我们自己的处理代码（类似C++中虚函数重载的概念）来处理我们感兴趣的事件，FrameWork也为队列类定义了一组操作成员函数供驱动操作队列。
+
+## *注册I/O控制*
 
 驱动程序的主要面向用户层的接口就是处理IO。用户程序通过调用DeviceIoControl，传入I/O控制码（I/O Control Codes）来通知驱动响应特定的请求。详细的描述可以参考[Using I/O Control Codes]。 定义I/O控制码很简单，有一个Windows定义的宏`CTL_CODE`.  
 `#define IOCTL_INDEX                     0x800`  
 `#define FILE_DEVICE_OSRUSBFX2          0x65500`  
 `#define USBFX2LK_SET_BARGRAPH_DISPLAY 0xD8`  
 `#define IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY CTL_CODE(FILE_DEVICE_OSRUSBFX2, IOCTL_INDEX + 5, METHOD_BUFFERED, FILE_WRITE_ACCESS)`  
-
-为了简化驱动程序员编写WDM驱动的工作量和处理并行事件，串行事件的复杂性，WDF抽象出了队列的概念来接收驱动需要处理的IO请求。详细可以参考[Framework Queue Objects]。对每个设备可以创建一个或多个队列。FrameWork为每个队列对象定义了一个回调函数的集合。我们可以选取我们部分回调函数并加入我们自己的处理代码（类似C++中重载的概念）来处理我们感兴趣的事件。
-
 和大多数驱动一样，OSRFX2的驱动在EvtDriverDeviceAdd回调函数中创建自己的I/O队列.  
 首先定义一个类型为`WDF_IO_QUEUE_CONFIG`的对象来设置队列的属性特征。  
 `WDF_IO_QUEUE_CONFIG                 ioQueueConfig;`  
@@ -115,10 +116,29 @@ OK, 接下来我们就可以调用[WdfIoQueueCreate]来创建这个队列了。
 
 以上工作做好后，当应用程序调用DeviceIoControl并传入`IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY`来设置LED bar的亮和灭的时候，我们的驱动程序的EvtIoDeviceControl函数就会被FrameWork激活回调。具体的操作就看我们在EvtIoDeviceControl里的处理代码了。因为应用APP在调用DeviceIoControl的时候除了指明IO控制码还需要给定一些其他的参数。对于设置LED bar来说就是要指定点亮或者熄灭8盏灯中的哪一盏。下面我们就来看看用户态的APP和内核态的驱动是怎样传递这些内容的以及我们的驱动又是怎样将这些内容传递给真正的执行体--"设备"的。
 
-## *EvtIoDeviceControl的处理*
+## *处理I/O控制*
+现在我们来看一下EvtIoDeviceControl中是如何处理应用发起的`IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY`请求的。
+[EvtIoDeviceControl]一共有五个参数，都是入(`_In_`)参。因为`IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY`操作目的是设置设备的LED bar，所以相对于驱动，没有需要传出给应用的内容，所以没有用到OutputBufferLength；应用有要传给驱动设置LEDbar的内容，大小是一个UCHAR，也就是一个字节，所以InputBufferLength是有效的。我们可以在EvtIoDeviceControl里判断一下，如果太小说明有问题。  
+`if(InputBufferLength < sizeof(UCHAR)) {`  
+...  
+`}`  
+接下来我们就可以在驱动里尝试得到应用程序传入的参数内容了。  
+`WDFMEMORY                           memory;`  
+`status = WdfRequestRetrieveInputMemory(Request, &memory);`  
+OS已经将用户态的数据封装为IRP，FrameWork进而将IRP封装为I/O请求，我们现在要做的就是从I/O请求中得到储存数据的内存句柄，[WdfRequestRetrieveInputMemory]干的就是这个。  
+得到了数据，这里我们不需要额外的处理，所以接下来就是准备发送给设备了。
+PC和OSRFX2设备之间设置LEDbar的命令采用的是EP0上的Setup传输。  
+`WDF_USB_CONTROL_SETUP_PACKET        controlSetupPacket;`  
+`WDF_USB_CONTROL_SETUP_PACKET_INIT_VENDOR(&controlSetupPacket,`  
+`                                         BmRequestHostToDevice,`  
+`                                         BmRequestToDevice,`  
+`                                         USBFX2LK_SET_BARGRAPH_DISPLAY,`  
+`                                         0,`  
+`                                         0);`  
+最后的操作就是初始化其他的参数后调用最终的[WdfUsbTargetDeviceSendControlTransferSynchronously]将数据发送的USB总线上，这样设备就可以接收到了。这里我们采用的是同步发送并设置了超时。
 
 
-
+# Step4 - USB批量传输.
 
 
 
@@ -136,6 +156,8 @@ http://channel9.msdn.com/Shows/Going+Deep/Doron-Holan-Kernel-Mode-Driver-Framewo
 [Using I/O Control Codes]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff565406(v=vs.85).aspx
 [Dispatching Methods for I/O Requests]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff540800(v=vs.85).aspx
 [Handling I/O Requests in KMDF Drivers]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff543296(v=vs.85).aspx
+[Framework Request Objects]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff542962(v=vs.85).aspx
+[Request Handlers]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff544583(v=vs.85).aspx
 
 
 [WdfDriverCreate]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff547175(v=vs.85).aspx
@@ -144,6 +166,9 @@ http://channel9.msdn.com/Shows/Going+Deep/Doron-Holan-Kernel-Mode-Driver-Framewo
 [WdfUsbTargetDeviceCreate]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff550077(v=vs.85).aspx
 [WdfDeviceCreateDeviceInterface]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff545935(v=vs.85).aspx
 [WdfIoQueueCreate]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff547401(v=vs.85).aspx
+[WdfRequestRetrieveInputMemory]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff550015(v=vs.85).aspx
+[WdfUsbTargetDeviceSendControlTransferSynchronously]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff550104(v=vs.85).aspx
+[WdfRequestCompleteWithInformation]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff549948(v=vs.85).aspx
 
 [DriverEntry]: http://msdn.microsoft.com/zh-cn/library/windows/hardware/ff544113(v=vs.85).aspx
 [EvtDriverDeviceAdd]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff541693(v=vs.85).aspx
