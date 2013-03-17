@@ -149,5 +149,14 @@ Figure4-3
 ## Object Creation
 有详细的创建对象的步骤
 
+## Object Hierarchy and Lifetime
+KMDF - Figure 5-4
+
+
+# Chapter 6: Driver Structure and Initialization
+Device Objects
+设备对象有四种，其中第四种值得再看看，似乎和我实现的Filter有关
+
+
 
 

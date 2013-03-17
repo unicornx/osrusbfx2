@@ -8,7 +8,15 @@
 
 # Step1 - 创建一个最简单的KMDF功能驱动。
 
-它只注册了**DriverEntry**和**EvtDeviceAdd**两个回调函数。WDF框架提供了其他所有缺省的功能，使之可以支持加载驱动并响应PNP和电源事件。我们可以安装，卸载，使能，去能该驱动，同时在OS挂起和恢复情况下该最小驱动也可以正常工作。
+参考DDMWDF第6章
+Required Driver Components
+KMDF Driver Structure and Requirements - 有一段描述驱动初始化的过程
+Driver Object - 也有一段DriverEntry的介绍
+
+
+
+
+一个最小化的KMDF驱动可以只实现**DriverEntry**和**EvtDeviceAdd**这两个回调函数。WDF框架提供了其他所有缺省的功能，使之可以支持加载驱动并响应PNP和电源事件。我们可以安装，卸载，使能，去能该驱动，同时在OS挂起和恢复情况下该最小驱动也可以正常工作。
 
 ## *驱动入口点[DriverEntry]*
 
@@ -33,6 +41,8 @@ Step1中创建设备对象时我们也没有设置对象属性 - `WDF_NO_OBJECT_
 `status = WdfDeviceCreate(&DeviceInit, WDF_NO_OBJECT_ATTRIBUTES, &device);`
 
 # Step2 - 准备设备对象
+参考DDMWDF Chapter6 - Queues and Other Support Objects的一段话
+
 主要包括:
 
 - 为OSRFX2添加上下文
