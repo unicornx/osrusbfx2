@@ -155,7 +155,17 @@ KMDF - Figure 5-4
 
 # Chapter 6: Driver Structure and Initialization
 Device Objects
-设备对象有四种，其中第四种值得再看看，似乎和我实现的Filter有关
+When the PnP manager finds a device that the driver controls, it notifies the framework. The framework, in turn, calls the driver so that the driver can create and initialize the data structures that are required to manage the device. The most important of these is the device object.
+
+The device object represents the driver's role in managing the device. It contains status information and is the driver's target for I/O requests that are directed to the device. Windows directs requests to the device object, not to the driver.
+
+设备对象有四种，这里有他们的定义，其中第四种值得再看看，似乎和我实现的Filter有关，还有一个Raw Devices的概念
+
+# Chapter 7: Plug and Play and Power Management
+
+
+
+
 
 
 
