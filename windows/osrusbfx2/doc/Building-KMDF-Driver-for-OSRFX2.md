@@ -1,12 +1,55 @@
-# **Step by Step, 为OSRFX2创建并发布一个KMDF驱动程序**
+# **Step by Step, 为OSRFX2创建一个KMDF驱动程序**
 
-大纲：  
-1. USB的基本概念介绍，最好紧密结合我们的OSRFX2例子  
-2. WDF的介绍，一些重要的类。 包括对象**关系**模型。要参考那本书  
-3. Step by Step  
-4. 一些总结，比如回调函数的调用次序，状态迁移图等  
+## ***Chapter 1. WDF简介***
+Windows Driver Foundation (WDF)是Windows上开发驱动的最新架构。基于这个架构我们可以开发用户态的驱动程序（UMDF），也可以开发内核态的驱动程序（KMDF）。
 
-# Step1 - 创建一个最简单的KMDF功能驱动。
+WDF为各种各样的设备类型提供了一个统一的驱动模型，这个模型的最最重要的特性或者说其FrameWork包括三个主要的关键模型，之所以称其为统一，还有一方面的意思是，如果我们基于WDF来开发驱动，那么规范是已经定义好的，所有的WDF驱动都要在这个框架下根据WDF定义的接口和行为操作，否则就不能享受WDF给我们带来的福利。
+
+### 1.1. WDF提供了一个设计良好的对象模型
+
+WDF将Windows的内核数据结构和与驱动操作相关的数据结构封装为对象，例如设备（device）,驱动（driver）, I/O请求（I/O request）, 队列（queue）等等。有些对象是由FrameWork创建并传递给WDF驱动使用，其他的对象可以由驱动代码根据自己的需要创建，使用并删除。我们驱动要做的一件很重要的事情就是要学会和这些WDF对象打交道并把他们组织起来为实现我们设备的特定功能服务。
+
+#### 1.1.1. 对象的编程接口
+
+	* 每个对象有属性(Properties),对属相的访问要通过方法(Methods)。
+	* 每个对象提供了操作方法(Methods)，WDF驱动通过调用这些函数操作对象的属性或者指示对象动作。  
+	* 每个对象支持事件 (Events)。实现上是回调函数。FrameWork提供了对这些事件的缺省处理，我们的驱动不需要去关心所有的回调函数，但是如果我们的驱动希望对某个事件添加自己的特定于设备的处理时（这总是需要的），则可以注册这个事件的回调函数。这样当系统状态改变或者一个I/O请求发生时FrameWork就会调用驱动注册的回调函数，并执行我们驱动自己的代码，可以类比于C++中的重载一样。  
+
+#### 1.1.2 在对象模型中提供了一套设计精巧的对象依附关系
+这套关系可以帮助我们的驱动代码简化对对象生命周期的管理，具体来说，如果一个对象B是依附于等级A，那么当A被删除时，FrameWork会自动删除对象B。就像封建社会的主人和仆从的关系，主子完蛋的时候，仆从也要跟着一起玩完。  
+
+	* Driver对象的级别最高，是WDF对象这棵大树的根，也是FrameWork为我们的驱动创建的第一个对象  
+	* 有些对象必须依附于Device对象，或者是Device对象的仆从对象的仆从。比如Queue对象，都依附于Device而存在。  
+	* 有些对象可以有多个主子，比如Memory对象。
+
+#### 1.1.3 对象的上下文空间
+FrameWork模型中的对象的数据结构都是由WDF定义好的，驱动如果为了自己设备的需要想要扩展这些对象存储的数据，可以为对象增加上下文空间。FrameWork对象数据结构中有一个域存放了指向这个上下文空间的句柄。
+
+### 1.2. WDF定义了一个统一的I/O模型
+
+I/O模型负责管理I/O请求。I/O请求包括Read，Write和Device I/O Control。
+
+FrameWork做为OS和驱动之间的一个中间层，当Windows向WDF驱动发送I/O请求时，FrameWork首先收到该请求，并决定是由FrameWork自己处理还是调用驱动注册的回调函数进行处理。如果需要交给驱动处理，则FrameWork就要进入利用一套机制代表驱动进行I/O请求的分发，排队，结束和取消操作。请注意这里FrameWork并不是简单地将I/O请求全权交给驱动进行处理的，而是通过内建了一套完善的PnP和Power事件处理以及状态管理机制来跟踪所有I/O请求，并在合适的时间点上呼叫驱动注册的回调处理函数。这些时间点包括系统电源状态的变化（比如进入休眠，从休眠退出）；设备和系统之间的连接发生变化（比如设备连上主机，或者设备从主机上断开）等等。这么做可以极大地减轻原来驱动处理的负担，并代替驱动处理好了复杂的同步处理。
+不需要跟踪管理复杂的I/O状态、事件,也不需要太多顾虑事件的同步，基于WDF的驱动要做的事情就只剩下创建合适的队列和注册定义在队列上的事件处理回调函数并加入自己的处理代码就可以了。  
+WDF创建队列时需要对队列进行仔细的设置，这样FrameWork才会更好地满足我们驱动的需要来为我们服务。对于驱动创建的每一个对象，我们要配置好：  
+1. 该队列可以处理的I/O请求的类型。  
+2. FrameWork应该怎样将队列上的I/O请求分发给WDF驱动。Parallel，Sequential还是Manual。  
+3. 当PnP和Power事件发生时FrameWork应该如何处理队列，包括启动，停止还是恢复队列。
+
+#### 1.2.1. I/O Request Cancellation
+Windows的I/O处理在内核中都是异步的，所以在没有WDF之前驱动代码要处理好取消事件不是件容易的事情，驱动需要自己定义和管理至少一个或者多个锁来处理潜在的竞争条件。在WDF中FrameWork代替驱动做了这些工作，为驱动创建的队列提供了内建的缺省锁机制来处理I/O请求的取消事件，FrameWork不仅可以代替驱动取消那些已进入队列排队但还没有分发给驱动的事件，对于那些已经分发的请求，只要驱动设置允许，FrameWork也可以将其取消。
+
+#### 1.2.2. I/O Targets
+I/O Targets这个FrameWork对象代表了接收请求的驱动实体。在设备栈中，一个WDF驱动缺省的I/O Target是该驱动的下一层驱动。但有时候I/O Targets也可能是同一级中的另一个驱动或者另一个设备栈中的一个驱动。
+
+### 1.3. PnP和Power管理模型-状态机
+提供了内建的对PnP和Power的管理，对状态的管理和迁移提供了缺省操作。  
+WDF驱动不需要自己实现一个复杂的状态机来跟踪PnP和电源状态来确定当状态发生变化时该采用什么动作。FrameWork自己内部有一个状态机为我们做了这一切并定义了需要实现的回调函数入口。驱动只要对自己关心的事件注册这些回调函数并在实现中加入对自己设备特定的处理，对其他的事件完全可以交给FrameWork去处理就好了。
+
+## ***Chapter 2. OSRFX2 - Step By Step***
+WDK中的OSRFX2例子在WDF出现之后已经基于WDF完全重写了。我们这里正是基于这个例子来循序渐进地了解一下如何开发一个基于WDF的KMDF驱动，以及在这个过程中我们需要注意哪些重要的知识点。
+
+### 2.1。 Step1 - 创建一个最简单的KMDF功能驱动。
 
 参考DDMWDF第6章
 Required Driver Components
@@ -18,7 +61,7 @@ Driver Object - 也有一段DriverEntry的介绍
 
 一个最小化的KMDF驱动可以只实现**DriverEntry**和**EvtDeviceAdd**这两个回调函数。WDF框架提供了其他所有缺省的功能，使之可以支持加载驱动并响应PNP和电源事件。我们可以安装，卸载，使能，去能该驱动，同时在OS挂起和恢复情况下该最小驱动也可以正常工作。
 
-## *驱动入口点[DriverEntry]*
+#### *驱动入口点[DriverEntry]*
 
 当一个驱动被加载到内存后第一个被FrameWork调用的函数，我们可以在这个函数中执行驱动的初始化工作。
 对标准驱动来说，这个函数是非常简单的：FrameWork在调用这个函数时传入两个参数，参数一DriverObject指向一块由内核的IO Manager分配的内存对象，我们需要在DriverEntry中对它进行初始化。参数二RegistryPath给出了内核在系统注册表中为我们的驱动分配的单元的路径，我们可以在这个路径下去存储一些驱动相关的信息。这里我们没有使用第二个参数。
@@ -28,7 +71,7 @@ Driver Object - 也有一段DriverEntry的介绍
 - `WDF_DRIVER_CONFIG`和`WDF_DRIVER_CONFIG_INIT`：用于初始化[WdfDriverCreate]的一个入参DriverConfig。`WDF_DRIVER_CONFIG`结构中包含有两个回调函数，我们这里用到了其中一个[EvtDriverDeviceAdd]。每个基于WDF实现的并支持即插即用的驱动都必须实现该回调函数并确保设置好`WDF_DRIVER_CONFIG`中该回调函数的地址，这样在设备连接并被系统枚举时该回调函数才会被系统正确调用到。
 - [WdfDriverCreate]：为正在被系统加载的驱动创建一个驱动对象，我们不需要自己申请内存，因为正如前面所述，驱动对象实体已经被FrameWork创建好并给出了其指针句柄。我们的任务就是根据我们的需要对其初始化（虽然函数的名字叫create）。
 
-## *添加新设备入口点[EvtDriverDeviceAdd]*
+#### *添加新设备入口点[EvtDriverDeviceAdd]*
 
 每当PnP Manager检测到一个新设备，系统都会调用EvtDeviceAdd函数。我们要做的工作就是在此函数中创建并初始化设备对象。
 
@@ -40,7 +83,7 @@ FrameWorks在调用该回调函数时传入两个参数，参数一是驱动对�
 Step1中创建设备对象时我们也没有设置对象属性 - `WDF_NO_OBJECT_ATTRIBUTES`, 在Step2中我们可以看到对属性更多的设置。  
 `status = WdfDeviceCreate(&DeviceInit, WDF_NO_OBJECT_ATTRIBUTES, &device);`
 
-# Step2 - 准备设备对象
+### 2.2. Step2 - 准备设备对象
 参考DDMWDF Chapter6 - Queues and Other Support Objects的一段话
 
 主要包括:
@@ -49,7 +92,7 @@ Step1中创建设备对象时我们也没有设置对象属性 - `WDF_NO_OBJECT_
 - 为OSRFX2准备硬件IO
 - 为OSRFX2注册设备接口([device interface])
 
-## *为OSRFX2添加上下文*
+#### *为OSRFX2添加上下文*
 因为我们是基于WDF框架创建的驱动，我们可以为我们驱动的设备对象创建自己的上下文空间。我们可以简单地将上下文空间理解为一块不可分页的内存区域。我们可以将自己驱动程序需要的一些变量定义在这个上下文数据区中，创建好之后我们可以通知WDF将其附加到WDF管理的框架对象中，以便在框架对象的生命周期中访问。更详细的内容我们可以参考[Framework Object Context Space].
 这里以OSRFX2为例我们看一下为设备对象创建上下文的过程。
 
@@ -68,7 +111,7 @@ Step1中创建设备对象时我们也没有设置对象属性 - `WDF_NO_OBJECT_
  - 最后在调用WdfDeviceCreate时我们就不会再象Step1中那样采用缺省的属性参数了，将我们先前定义并初始化好的属性对象attributes作为第二个参数传入。这样FrameWork就知道需要将我们的上下文对象和设备对象建立起联系。
 `status = WdfDeviceCreate(&DeviceInit, &attributes, &device);`
 
-## *为OSRFX2准备硬件IO*
+#### *为OSRFX2准备硬件IO*
 FrameWork要求我们在另一个重要的回调函数[EvtDevicePrepareHardware]中对物理设备进行初始化操作以确保驱动程序可以访问硬件设备。比如：建立物理地址和虚拟地址之间的映射以便驱动可以访问系统分配给设备的地址等。EvtDevicePrepareHardware所进行的初始化操作应该是设备枚举后只执行一次的动作。对于其他需要在设备进入工作状态(D0)的初始化操作，我们建议放在[EvtDeviceD0Entry]中执行。
 
 首先我们来看一下如何注册EvtDevicePrepareHardware。为了向FrameWork注册EvtDevicePrepareHardware，我们需要在[EvtDriverDeviceAdd]中调用[WdfDeviceCreate]之前对[WdfDeviceCreate]的DeviceInit参数进行初始化,主要是调用[WdfDeviceInitSetPnpPowerEventCallbacks]对DeviceInit设置与PnP以及电源管理相关的回调函数。示例代码如下：  
@@ -91,7 +134,7 @@ FrameWork要求我们在另一个重要的回调函数[EvtDevicePrepareHardware]
 `status = WdfUsbTargetDeviceSelectConfig(pDeviceContext->UsbDevice,WDF_NO_OBJECT_ATTRIBUTES,&configParams);`  
 `pDeviceContext->UsbInterface = configParams.Types.SingleInterface.ConfiguredUsbInterface; `  
 
-## *为OSRFX2注册设备接口([device interface])*
+#### *为OSRFX2注册设备接口([device interface])*
 KMDF驱动程序运行在内核态，为了让用户态的应用程序APP能够访问我们的驱动程序对象，主要是设备接口对象，驱动程序需要和操作系统协作在暴露出应用程序可以在用户态访问的接口，这就是[device interface]，俗称符号链接(symbolic link)。应用程序可以将设备接口的符号链接作为调用Win32 API的参数来和驱动打交道。更详细的描述可以参考[Using Device Interfaces]。
 
 具体的操作可分如下几部：
@@ -103,7 +146,7 @@ KMDF驱动程序运行在内核态，为了让用户态的应用程序APP能够�
 然后在EvtDeviceAdd回调函数中调用[WdfDeviceCreateDeviceInterface]即可  
 `status = WdfDeviceCreateDeviceInterface(device,(LPGUID) &GUID_DEVINTERFACE_OSRUSBFX2,NULL);// Reference String`  
 
-# Step3 - USB控制传输.
+### 2.3. Step3 - USB控制传输.
 
 在继续Step3和Step4之前，我们要先理解一些KMDF驱动中处理I/O Requests相关的概念。详细的描述可以参考[Handling I/O Requests in KMDF Drivers]。
 
@@ -111,7 +154,7 @@ KMDF驱动程序运行在内核态，为了让用户态的应用程序APP能够�
 
 [Framework Queue Objects] - I/O队列对象，是设计为表示用来缓存I/O请求对象的队列。为了简化驱动程序员编写WDM驱动的工作量和处理并行I/O事件，串行I/O事件的复杂性，WDF抽象出了I/O队列的概念来接收驱动需要处理的IO请求。对每个设备可以创建一个或多个队列。FrameWork为I/O队列类定义了一个回调函数的集合，WDF称之为[Request Handlers]。我们可以选取我们部分回调函数并加入我们自己的处理代码（类似C++中虚函数重载的概念）来处理我们感兴趣的事件，FrameWork也为队列类定义了一组操作成员函数供驱动操作队列。
 
-## *注册I/O控制*
+#### *注册I/O控制*
 
 驱动程序的主要面向用户层的接口就是处理IO。用户程序通过调用DeviceIoControl，传入I/O控制码（I/O Control Codes）来通知驱动响应特定的请求。详细的描述可以参考[Using I/O Control Codes]。 定义I/O控制码很简单，有一个Windows定义的宏`CTL_CODE`.  
 `#define IOCTL_INDEX                     0x800`  
@@ -132,7 +175,7 @@ OK, 接下来我们就可以调用[WdfIoQueueCreate]来创建这个队列了。
 
 以上工作做好后，当应用程序调用DeviceIoControl并传入`IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY`来设置LED bar的亮和灭的时候，我们的驱动程序的EvtIoDeviceControl函数就会被FrameWork激活回调。具体的操作就看我们在EvtIoDeviceControl里的处理代码了。因为应用APP在调用DeviceIoControl的时候除了指明IO控制码还需要给定一些其他的参数。对于设置LED bar来说就是要指定点亮或者熄灭8盏灯中的哪一盏。下面我们就来看看用户态的APP和内核态的驱动是怎样传递这些内容的以及我们的驱动又是怎样将这些内容传递给真正的执行体--"设备"的。
 
-## *处理I/O控制*
+#### *处理I/O控制*
 现在我们来看一下EvtIoDeviceControl中是如何处理应用发起的`IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY`请求的。
 [EvtIoDeviceControl]一共有五个参数，都是入(`_In_`)参。因为`IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY`操作目的是设置设备的LED bar，所以相对于驱动，没有需要传出给应用的内容，所以没有用到OutputBufferLength；应用有要传给驱动设置LEDbar的内容，大小是一个UCHAR，也就是一个字节，所以InputBufferLength是有效的。我们可以在EvtIoDeviceControl里判断一下，如果太小说明有问题。  
 `if(InputBufferLength < sizeof(UCHAR)) {`  
@@ -154,12 +197,12 @@ PC和OSRFX2设备之间设置LEDbar的命令采用的是EP0上的Setup传输。
 最后的操作就是初始化其他的参数后调用最终的[WdfUsbTargetDeviceSendControlTransferSynchronously]将数据发送的USB总线上，这样设备就可以接收到了。这里我们采用的是同步发送并设置了超时。
 
 
-# Step4 - USB批量传输.
+### 2.4. Step4 - USB批量传输.
 
 
 
 
-参考：  
+# 参考文献：  
 http://www.ituring.com.cn/article/554  
 http://channel9.msdn.com/Shows/Going+Deep/Doron-Holan-Kernel-Mode-Driver-Framework
 
