@@ -23,13 +23,15 @@
 考虑到一台PC同时可能会处理多个相同的设备，所以我们的驱动代码要考虑同时支持多个设备栈。但每个设备栈只对应着连在系统上的一个物理设备。  
 ![设备对象和设备栈](./images/DDMWDF-2-2.PNG)
 
-以我们即将介绍的OSRFX2设备和驱动为例。
+以我们即将介绍的OSRFX2设备和驱动为例。当OSRFX2设备接入系统时，它的设备栈中只有一个FDO，对应这我们的osrusbfx2.sys，而PDO对应着USB的总线驱动等。
+![设备对象和设备栈OSRFX2](./images/DDMWDF-2-2-osrfx2.PNG)
 
+有关设备栈的更详细的描述可以参考[device stack]。
 
 ### 1.1.3 设备树
+从系统的角度来看，一个设备并不是只通过一个总线就可以连接到CPU的，整个系统里往往由多层总线叠加组成。
 
-
-
+有关设备树的更详细的描述可以参考[Device Tree]。
 
 ### 1.2 WDF简介
 
@@ -268,6 +270,8 @@ PC和OSRFX2设备之间设置LEDbar的命令采用的是EP0上的Setup传输。
 http://www.ituring.com.cn/article/554  
 http://channel9.msdn.com/Shows/Going+Deep/Doron-Holan-Kernel-Mode-Driver-Framework
 
+[Device Tree]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff543194(v=vs.85).aspx
+[device stack]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff556277(v=vs.85).aspx#wdkgloss.device_stack
 [Framework Object Context Space]: http://msdn.microsoft.com/en-us/library/ff542873(v=vs.85).aspx
 [device interface]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff556277(v=vs.85).aspx#wdkgloss.device_interface
 [USB I/O Targets]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff544752(v=vs.85).aspx
