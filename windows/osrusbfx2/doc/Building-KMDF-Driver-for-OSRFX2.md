@@ -25,15 +25,18 @@
 考虑到一台PC同时可能会处理多个相同的设备，所以我们的驱动代码要考虑同时支持多个设备栈。但每个设备栈只对应着连在系统上的一个物理设备。  
 ![设备对象和设备栈](./images/DDMWDF-2-2.PNG)
 
-以我们即将介绍的OSRFX2设备和驱动为例。当OSRFX2设备接入系统时，它的设备栈中只有一个FDO，对应这我们的osrusbfx2.sys，而PDO对应着USB的总线驱动等。  
-![设备对象和设备栈OSRFX2](./images/DDMWDF-2-2-osrfx2.PNG)
-
 有关设备栈的更详细的描述可以参考[device stack]。
 
 ### 1.1.3 设备节点和设备树
 PnP管理器为每个设备栈在内存中保存了一份拷贝，除了设备对象的信息，还有一些系统内部维护使用的信息，比如设备是否已经启动等等。总的数据结构被称为设备节点[devnode]。  
 
 一个设备节点只能表达一个总线上的一个设备的信息。而从系统的角度来看，整个系统里往往由多层总线叠加组成。所以多层总线以及每层总线上的多个设备就构成了一棵多个设备节点构成的大树。这棵树的信息由PnP管理器维护。有关设备树的更详细的描述可以参考[Device Tree]。
+
+查看设备树除了用WinDbg，其实简单地用设备管理器也可以看个大概，下图就是在一台XP电脑上从Root节点到OSRFX2设备的例子。每一个节点都对应着一个设备栈：  
+![设备树OSRFX2](./images/DevTree-osrfx2.PNG)  
+
+对于OSRFX2设备“WDF Sample Driver for OSR USB-FX2 Learning Kit”, 其对应的设备栈示意图应该如下,其中PDO由USB Root Hub对应的Windows自带的usbhub.sys驱动创建，而FDO由osrusbfx2.sys驱动负责创建：  
+![设备对象和设备栈OSRFX2](./images/DevStack-osrfx2.PNG)
 
 ### 1.2 WDF简介
 
@@ -73,19 +76,23 @@ FrameWork做为OS和驱动之间的一个中间层，当Windows向WDF驱动发�
 
 不需要跟踪管理复杂的I/O状态、事件,也不需要太多顾虑事件的同步，基于WDF的驱动要做的事情就只剩下创建合适的队列和注册定义在队列上的事件处理回调函数并加入自己的处理代码就可以了。  
 
-##### 1.2.2.1. I/O队列（Queue）
+##### 1.2.2.1. I/O Request
+I/O请求有三种类型：包括Read请求，Write请求和Device I/O Control请求。
+
+WDF将I/O请求封装起来，定义了[Framework Request Objects] - I/O请求对象，用来表示I/O Manager发送给驱动的I/O请求。每个I/O请求封装了一个WDM的I/O Request packet,或者简称为IRP。基于WDF写的驱动一般不需要直接访问IRP结构，而是通过调用[Framework Request Objects]提供的成员函数对其进行操作。
+
+I/O Request Cancellation
+Windows的I/O处理在内核中都是异步的，所以在没有WDF之前驱动代码要处理好取消事件不是件容易的事情，驱动需要自己定义和管理至少一个或者多个锁来处理潜在的竞争条件。在WDF中FrameWork代替驱动做了这些工作，为驱动创建的队列提供了内建的缺省锁机制来处理I/O请求的取消事件，FrameWork不仅可以代替驱动取消那些已进入队列排队但还没有分发给驱动的事件，对于那些已经分发的请求，只要驱动设置允许，FrameWork也可以将其取消。
+
+##### 1.2.2.2. I/O队列（Queue）
+WDF为驱动开发预定义了[Framework Queue Objects] - I/O队列对象，用来表示缓存I/O请求对象的队列。为了简化驱动程序员编写WDM驱动的工作量和处理并行I/O事件，串行I/O事件的复杂性，WDF抽象出了I/O队列的概念来接收驱动需要处理的I/O请求。对每个设备可以创建一个或多个队列。FrameWork为I/O队列类定义了一个回调函数的集合，WDF称之为[Request Handlers]。我们可以选取我们部分回调函数并加入我们自己的处理代码（类似C++中虚函数重载的概念）来处理我们感兴趣的事件，FrameWork也为队列类定义了一组操作成员函数供驱动操作队列。
+
 所有的I/O请求在被分发给驱动之前都需要进入队列。队列对象是依附于设备对象而存在的。FrameWork负责管理队列，而驱动代码负责创建队列并设置队列的属性告诉FrameWork该如何管理队列对象。
 WDF驱动创建队列时需要对队列进行仔细的设置，这样FrameWork才会更好地满足我们驱动的需要来为我们服务。对于驱动创建的每一个队列对象，我们要配置好：  
 
 	* 该队列可以处理的I/O请求的类型。  
 	* FrameWork应该怎样将队列上的I/O请求分发给WDF驱动。Parallel，Sequential还是Manual。  
 	* 当PnP和Power事件发生时FrameWork应该如何处理队列，包括启动，停止还是恢复队列。  如果我们希望FrameWork帮助我们管理影响队列的电源状态变化事件，那么我们就配置这个队列是使能电源管理的。只要这样FrameWork就会为我们检测电源状态变化，并在设备进入工作状态时才会为其分发消息，此时队列自动开始工作；当设备退出工作状态时，FrameWork就让队列停止工作，不会为该队列分发消息了。这么做的好处就是驱动如果知道这个队列是使能了电源管理的，则收到I/O请求时就不用再去确认设备的状态了。当然我们也可以不让FrameWork为我们的队列管理电源状态变化。更详细的描述可以参考DDMWDF第7章"Plug and Play and Power Management Support in WDF"。
-
-##### 1.2.2.2. I/O Request
-I/O请求有三种类型：包括Read请求，Write请求和Device I/O Control请求。
-
-I/O Request Cancellation
-Windows的I/O处理在内核中都是异步的，所以在没有WDF之前驱动代码要处理好取消事件不是件容易的事情，驱动需要自己定义和管理至少一个或者多个锁来处理潜在的竞争条件。在WDF中FrameWork代替驱动做了这些工作，为驱动创建的队列提供了内建的缺省锁机制来处理I/O请求的取消事件，FrameWork不仅可以代替驱动取消那些已进入队列排队但还没有分发给驱动的事件，对于那些已经分发的请求，只要驱动设置允许，FrameWork也可以将其取消。
 
 ##### 1.2.2.3. I/O Targets
 I/O目标对象从字面上理解就是可以接收I/O请求的对象，具体来说它代表了接收请求的运行在内核态的驱动实体。  
@@ -99,7 +106,6 @@ I/O目标对象从字面上理解就是可以接收I/O请求的对象，具体�
 除了将I/O目标对象根据距离远近分为缺省和远距离两种类型以外，根据目标对象代表的设备类型来分还可以分为通用目标对象和专有目标对象两种。
 
 通用I/O目标可以用来代表所有的设备类型，驱动使用它们时不需要对其格式进行特别的处理。而专有I/O目标的格式则和特定的某一类设备类型相关。USB目标对象就是WDF定义的一种专有I/O目标对象，USB目标对象传送的请求使用WDF定义的URB（USB request blocks）格式，WDF提供专用的API来操作这些URB数据。随着WDF支持越来越多新的设备类型，则WDF也会扩展并定义越来越多的新的专有I/O目标类和操作他们的API。
-
 
 #### 1.2.3. PnP和Power管理模型-状态机
 提供了内建的对PnP和Power的管理，对状态的管理和迁移提供了缺省操作。  
@@ -210,15 +216,9 @@ FrameWork要求我们在另一个重要的回调函数[EvtDevicePrepareHardware]
 最后我们将USB设备根据我们的需要选择好并创建USB接口对象并将该接口对象也存储在我们的上下文中备用。  
 `status = WdfUsbTargetDeviceSelectConfig(pDeviceContext->UsbDevice,WDF_NO_OBJECT_ATTRIBUTES,&configParams);`  
 `pDeviceContext->UsbInterface = configParams.Types.SingleInterface.ConfiguredUsbInterface; `  
-
-
 ### 2.3. Step3 - USB控制传输.
 
 在继续Step3和Step4之前，我们要先理解一些KMDF驱动中处理I/O Requests相关的概念。详细的描述可以参考[Handling I/O Requests in KMDF Drivers]。
-
-[Framework Request Objects] - I/O请求对象，是设计为表示I/O Manager发送给驱动的I/O请求。每个I/O请求封装了一个WDM的I/O Request packet,或者简称为IRP。基于WDF写的驱动一般不需要直接访问IRP结构，而是通过调用[Framework Request Objects]提供的成员函数对其进行操作。
-
-[Framework Queue Objects] - I/O队列对象，是设计为表示用来缓存I/O请求对象的队列。为了简化驱动程序员编写WDM驱动的工作量和处理并行I/O事件，串行I/O事件的复杂性，WDF抽象出了I/O队列的概念来接收驱动需要处理的IO请求。对每个设备可以创建一个或多个队列。FrameWork为I/O队列类定义了一个回调函数的集合，WDF称之为[Request Handlers]。我们可以选取我们部分回调函数并加入我们自己的处理代码（类似C++中虚函数重载的概念）来处理我们感兴趣的事件，FrameWork也为队列类定义了一组操作成员函数供驱动操作队列。
 
 #### *注册I/O控制*
 
