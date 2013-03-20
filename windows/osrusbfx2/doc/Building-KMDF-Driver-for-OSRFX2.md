@@ -32,7 +32,7 @@ PnP管理器为每个设备栈在内存中保存了一份拷贝，除了设备�
 
 一个设备节点只能表达一个总线上的一个设备的信息。而从系统的角度来看，整个系统里往往由多层总线叠加组成。所以多层总线以及每层总线上的多个设备就构成了一棵多个设备节点构成的大树。这棵树的信息由PnP管理器维护。有关设备树的更详细的描述可以参考[Device Tree]。
 
-查看设备树除了用WinDbg，其实简单地用设备管理器也可以看个大概，下图就是在一台XP电脑上从Root节点到OSRFX2设备的例子。每一个节点都对应着一个设备栈：  
+查看设备树除了用WinDbg，其实粗略地用设备管理器也可以看个大概，下图就是在一台XP电脑上从Root节点到OSRFX2设备的例子。从根节点“PC-201212181552”开始一路向下直到“WDF Sample Driver for OSR USB-FX2 Learning Kit”，每一个节点(红色方框标出)都对应着一个设备栈：  
 ![设备树OSRFX2](./images/DevTree-osrfx2.PNG)  
 
 对于OSRFX2设备“WDF Sample Driver for OSR USB-FX2 Learning Kit”, 其对应的设备栈示意图应该如下,其中PDO由USB Root Hub对应的Windows自带的usbhub.sys驱动创建，而FDO由osrusbfx2.sys驱动负责创建：  
