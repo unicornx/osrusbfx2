@@ -305,6 +305,16 @@ Step4里会介绍I/O请求的其他两种类型：Read请求和Write请求。和
 
 #### 2.4.2. 添加I/O Target对象
 
+对于OSRFX2，写时使用EP6(Bulk-OUT)，读时使用EP8(Bulk-IN)。在OSRFX2的配置中这两个端点在接口(Interface)中的顺序分别为1和2(顺序从0开始，0已经留给了EP1做中断传输)。
+
+修改`DEVICE_CONTEXT`结构，增加两个WDFUSBPIPE对象，用来存储Read和Write的I/O Target对象。
+
+
+修改EvtDevicePrepareHardware函数，获取WDFUSBPIPE的句柄。因为我们先前已经创建了WDFUSBDEVICE并获取了设备对象的WDFUSBINTERFACE对象，此时可以直接从WDFUSBINTERFACE对象里直接得到WDFUSBPIPE。
+`pDeviceContext->BulkReadPipe = WdfUsbInterfaceGetConfiguredPipe(pDeviceContext->UsbInterface,BULK_IN_ENDPOINT_INDEX,NULL);`  
+`pDeviceContext->BulkWritePipe = WdfUsbInterfaceGetConfiguredPipe(pDeviceContext->UsbInterface,BULK_OUT_ENDPOINT_INDEX,NULL);`  
+
+
 #### 2.4.3. 异步I/O请求处理
 
 
