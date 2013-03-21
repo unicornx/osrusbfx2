@@ -447,6 +447,18 @@ Step4里会介绍I/O请求的其他两种类型：Read请求和Write请求。OSR
 
 值得一提的是处理I/O请求时，对于Applications而言，其调用Windows API的时候有同步和异步调用的区别。驱动调用FrameWork的API发送I/O请求时也分同步调用和异步调用。但这两者之间实际上并无联系。在驱动内部并不知道当前从应用程序传递进来的的I/O请求是同步方式还是异步方式，驱动只是根据自己的需要由自己决定向I/O目标采用何种方式发起I/O请求。另一方面，从Windows的角度来看，在Windows的I/O模型中，所有的I/O操作都是异步的。对于应用程序和WDF驱动来说，所谓的同步和异步概念都是由I/O管理器封装并提供出来的一种方便大家使用的操作方式，在Windows内核系统内部都是采用异步方式处理的。
 
+<a name="2.5" id="2.5"></a>
+### 2.5. Step5 -  WPP tracing
+[返回总目录](#contents) 
+
+Easy Migration from Debug Print Statements
+
+在驱动编程学习中，往往需要通过DbgPrint或者KdPrint来输出调试信息，对于Check版本，KdPrint只是DbgPrint的一个宏定义，而对于Free版本，KdPrint将被优化掉。这些输出信息可以通过DebugView对内核的监控来看到。
+
+KdPrint is identical to the DbgPrint routine in code that is compiled in a checked build environment. This routine has no effect if compiled in a free build environment. Only kernel-mode drivers can call the KdPrint routine.
+
+[WPP Preprocessor]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff556201(v=vs.85).aspx
+
 
 # 参考文献：  
 http://www.ituring.com.cn/article/554  
