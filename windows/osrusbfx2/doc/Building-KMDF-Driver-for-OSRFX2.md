@@ -1,11 +1,53 @@
 # **Step by Step, 为OSRFX2创建一个KMDF驱动程序**
 
-## ***Chapter 1. 基础知识***
+<a name="contents" id="contents"></a>
+## 总目录
+###[**Chapter 1. 基础知识**](#chapter-1)  
 
+[**1.1 Windows驱动的一些基本知识**](#1.1)  
+[1.1.1 Windows系统架构](#1.1.1)  
+[1.1.2 设备对象和设备栈](#1.1.2)  
+[1.1.3 设备节点和设备树](#1.1.3)  
+
+[**1.2 WDF简介**](#1.2)  
+[1.2.1. WDF提供了一个设计良好的对象模型](#1.2.1)  
+[1.2.2. WDF定义了一个统一的I/O模型](#1.2.2)  
+
+###[**Chapter 2. OSRFX2 - Step By Step**](#chapter-2)  
+
+[**2.1. Step1 - 创建一个最简单的KMDF功能驱动**](#2.1)  
+[2.1.1. 驱动入口点DriverEntry](#2.1.1)  
+[2.1.2 添加新设备入口点EvtDriverDeviceAdd](#2.1.2)  
+
+[**2.2. Step2 - 准备设备对象**](#2.2)  
+[2.2.1. 为OSRFX2注册设备接口(device interface](#2.2.1)  
+[2.2.2 为OSRFX2添加上下文](#2.2.2)  
+[2.2.3 为OSRFX2准备I/O目标对象](#2.2.3)  
+
+[**2.3. Step3 - USB同步控制传输**](#2.3)  
+[2.3.1. 注册I/O控制码](#2.3.1)  
+[2.3.2. 添加队列](#2.3.2)  
+[2.3.3. 处理I/O控制](#2.3.3)  
+
+[**2.4. Step4 - USB异步批量传输**](#2.4)  
+[2.4.1. 注册回调函数](#2.4.1)  
+[2.4.2. 添加I/O Target对象](#2.4.2)  
+[2.4.3. 异步I/O请求处理](#2.4.3)  
+
+<a name="chapter-1" id="chapter-1"></a>
+## ***Chapter 1. 基础知识***
+[返回总目录](#contents) 
+
+<a name="1.1" id="1.1"></a>
 ### 1.1 Windows驱动的一些基本知识
+[返回总目录](#contents) 
+
 在进入WDF之前，我们有必要先回顾并深刻了解Windows这个操作系统和驱动相关的一些基本知识。WDF虽然很抽象很高级，但拨开其面纱，内部仍然是万变不离其宗，并没有离WDM太远。
 
+<a name="1.1.1" id="1.1.1"></a>
 ### 1.1.1 Windows系统架构
+[返回总目录](#contents) 
+
 在Windows系统中，如果以分层的角度去看待一个I/O请求的执行路径，从上到下依次可以包括如下5层：  
 1. 应用程序（Application），发起一个I/O请求。  
 2. Windows API，可以主要理解为Win32 API。运行在用户态的应用程序不可以直接访问内核态的模组，但它们可以通过调用Win32 API发起I/O请求。  
@@ -18,7 +60,10 @@
 
 ![Windows系统架构](./images/DDMWDF-2-1.PNG)
 
+<a name="1.1.2" id="1.1.2"></a>
 ### 1.1.2 设备对象和设备栈
+[返回总目录](#contents) 
+
 在Windows系统中，一个物理设备要正常工作，往往需要多个驱动的支持。PnP管理器检测到一个物理设备连接到系统总线后，从枚举设备的总线驱动开始，先创建最底层的物理设备对象（Physical Device Object，简称PDO），然后在系统中按照栈的形式从下到上调用对应驱动的AddDevice，为每一个驱动对应地创建一个设备对象。所以除了极少情况（Raw Mode）每一个设备栈都至少包括一个PDO，一个FDO以及零个或多个Filter DO,见下图。详细的过程描述可以参考[When Are WDM Device Objects Created?]  
 ![Device-Stack](./images/DevStack.png)  
 设备栈建立好之后，当I/O管理器从应用程序收到一个I/O请求时，会按照这个栈的顺序将I/O请求依次向下转发给各级设备对象，直到在某一层被处理结束。设备对象作为I/O管理器和驱动程序之间的代理，其数据结构中包含了驱动注册的回调函数指针集合。I/O管理器通过这些回调函数和我们的驱动交互，调用我们驱动实现的功能函数。  
@@ -27,7 +72,10 @@
 
 有关设备栈的更详细的描述可以参考[device stack]。
 
+<a name="1.1.3" id="1.1.3"></a>
 ### 1.1.3 设备节点和设备树
+[返回总目录](#contents) 
+
 PnP管理器为每个设备栈在内存中保存了一份拷贝，除了设备对象的信息，还有一些系统内部维护使用的信息，比如设备是否已经启动等等。总的数据结构被称为设备节点[devnode]。  
 
 一个设备节点只能表达一个总线上的一个设备的信息。而从系统的角度来看，整个系统里往往由多层总线叠加组成。所以多层总线以及每层总线上的多个设备就构成了一棵多个设备节点构成的大树。这棵树的信息由PnP管理器维护。有关设备树的更详细的描述可以参考[Device Tree]。
@@ -38,7 +86,9 @@ PnP管理器为每个设备栈在内存中保存了一份拷贝，除了设备�
 对于OSRFX2设备“WDF Sample Driver for OSR USB-FX2 Learning Kit”, 其对应的设备栈示意图应该如下,其中PDO由USB Root Hub对应的Windows自带的usbhub.sys驱动创建，而FDO由osrusbfx2.sys驱动负责创建：  
 ![设备对象和设备栈OSRFX2](./images/DevStack-osrfx2.PNG)
 
+<a name="1.2" id="1.2"></a>
 ### 1.2 WDF简介
+[返回总目录](#contents) 
 
 Windows Driver Foundation (WDF)是Windows上开发驱动的最新架构。基于这个架构我们可以开发用户态的驱动程序（UMDF），也可以开发内核态的驱动程序（KMDF）。
 
@@ -51,8 +101,9 @@ WDF为各种各样的设备类型抽象了一个统一的驱动模型，这个�
 之所以称其为统一，还有一方面的意思是，如果我们基于WDF来开发驱动，那么规范是已经定义好的，所有的WDF驱动都要在这个框架下根据WDF定义的接口和行为操作，否则就不能享受WDF给我们带来的福利。  
 ![WDF模型](./images/ObjectModel.PNG)
 
-
+<a name="1.2.1" id="1.2.1"></a>
 #### 1.2.1. WDF提供了一个设计良好的对象模型
+[返回总目录](#contents) 
 
 WDF将Windows的内核数据结构和与驱动操作相关的数据结构封装为对象，例如设备（device）,驱动（driver）, I/O请求（I/O request）, 队列（queue）等等。这些对象有些是由FrameWork创建并传递给WDF驱动使用，有些对象可以由驱动代码根据自己的需要创建，使用并删除。我们驱动要做的一件很重要的事情就是要学会和这些WDF对象打交道并把他们组织起来为实现我们设备的特定功能服务。
 
@@ -63,6 +114,7 @@ WDF将Windows的内核数据结构和与驱动操作相关的数据结构封装�
  * 每个对象支持事件 (Events)。实现上是回调函数。FrameWork提供了对这些事件的缺省处理，我们的驱动不需要去关心所有的回调函数，但是如果我们的驱动希望对某个事件添加自己的特定于设备的处理时（这总是需要的），则可以注册这个事件的回调函数。这样当系统状态改变或者一个I/O请求发生时FrameWork就会调用驱动注册的回调函数，并执行我们驱动自己的代码，可以类比于C++中的重载一样。  
 
 ##### 1.2.1.2 在对象模型中提供了一套设计精巧的对象依附关系
+
 这套关系可以帮助我们的驱动代码简化对对象生命周期的管理，具体来说，如果一个对象B是依附于等级A，那么当A被删除时，FrameWork会自动删除对象B。就像封建社会的主人和仆从的关系，主子完蛋的时候，仆从也要跟着一起玩完。  
 
  * Driver对象的级别最高，是WDF对象这棵大树的根，也是FrameWork为我们的驱动创建的第一个对象  
@@ -70,9 +122,12 @@ WDF将Windows的内核数据结构和与驱动操作相关的数据结构封装�
  * 有些对象可以有多个主子，比如Memory对象。
 
 ##### 1.2.1.3 对象的上下文空间
+
 FrameWork模型中的对象的数据结构都是由WDF定义好的，驱动如果为了自己设备的需要想要扩展这些对象存储的数据，可以为对象增加上下文空间。FrameWork对象数据结构中有一个域存放了指向这个上下文空间的句柄。
 
+<a name="1.2.2" id="1.2.2"></a>
 #### 1.2.2. WDF定义了一个统一的I/O模型
+[返回总目录](#contents) 
 
 WDF的I/O模型负责管理I/O请求（I/O Request）。I/O请求缓存在I/O队列（I/O Queue）里，如果本驱动无法处理完该I/O请求则它还要继续发送给下一个处理者-I/O目标(I/O Target)-继续处理直到完成。所以WDF的I/O模型颠来倒去就是围绕着I/O请求，I/O队列和I/O目标这三个主要组成部分来介绍。当然幕后还是不要忘记了FrameWork这个大老板。
 
@@ -83,6 +138,7 @@ FrameWork做为OS和驱动之间的一个中间层，当Windows向WDF驱动发�
 不需要跟踪管理复杂的I/O状态、事件,也不需要太多顾虑事件的同步，基于WDF的驱动要做的事情就只剩下创建合适的队列和注册定义在队列上的事件处理回调函数并加入自己的处理代码就可以了。  
 
 ##### 1.2.2.1. I/O Request
+
 I/O请求有三种类型：包括Read请求，Write请求和Device I/O Control请求。
 有关KMDF驱动中处理I/O Requests相关的概念，更详细的描述可以参考[Handling I/O Requests in KMDF Drivers]。
 
@@ -92,6 +148,7 @@ I/O Request Cancellation
 Windows的I/O处理在内核中都是异步的，所以在没有WDF之前驱动代码要处理好取消事件不是件容易的事情，驱动需要自己定义和管理至少一个或者多个锁来处理潜在的竞争条件。在WDF中FrameWork代替驱动做了这些工作，为驱动创建的队列提供了内建的缺省锁机制来处理I/O请求的取消事件，FrameWork不仅可以代替驱动取消那些已进入队列排队但还没有分发给驱动的事件，对于那些已经分发的请求，只要驱动设置允许，FrameWork也可以将其取消。
 
 ##### 1.2.2.2. I/O队列（Queue）
+
 WDF为驱动开发预定义了[Framework Queue Objects] - I/O队列对象，用来表示缓存I/O请求对象的队列。为了简化驱动程序员编写WDM驱动的工作量和处理并行I/O事件，串行I/O事件的复杂性，WDF抽象出了I/O队列的概念来接收驱动需要处理的I/O请求。对每个设备可以创建一个或多个队列。FrameWork为I/O队列类定义了一个回调函数的集合，WDF称之为[Request Handlers]。我们可以选取我们部分回调函数并加入我们自己的处理代码（类似C++中虚函数重载的概念）来处理我们感兴趣的事件，FrameWork也为队列类定义了一组操作成员函数供驱动操作队列。
 
 所有的I/O请求在被分发给驱动之前都需要进入队列。队列对象是依附于设备对象而存在的。FrameWork负责管理队列，而驱动代码负责创建队列并设置队列的属性告诉FrameWork该如何管理队列对象。
@@ -102,6 +159,7 @@ WDF驱动创建队列时需要对队列进行仔细的设置，这样FrameWork�
  * 当PnP和Power事件发生时FrameWork应该如何处理队列，包括启动，停止还是恢复队列。  如果我们希望FrameWork帮助我们管理影响队列的电源状态变化事件，那么我们就配置这个队列是使能电源管理的。只要这样FrameWork就会为我们检测电源状态变化，并在设备进入工作状态时才会为其分发消息，此时队列自动开始工作；当设备退出工作状态时，FrameWork就让队列停止工作，不会为该队列分发消息了。这么做的好处就是驱动如果知道这个队列是使能了电源管理的，则收到I/O请求时就不用再去确认设备的状态了。当然我们也可以不让FrameWork为我们的队列管理电源状态变化。更详细的描述可以参考DDMWDF第7章"Plug and Play and Power Management Support in WDF"。
 
 ##### 1.2.2.3. I/O Targets
+
 I/O目标对象从字面上理解就是可以接收I/O请求的对象，具体来说它代表了接收请求的运行在内核态的驱动实体。  
 
 从I/O目标代表的驱动对象距离发起I/O请求对象的远近，我们可以将其分为缺省I/O目标对象和远距离I/O目标对象。 
@@ -115,14 +173,20 @@ I/O目标对象从字面上理解就是可以接收I/O请求的对象，具体�
 通用I/O目标可以用来代表所有的设备类型，驱动使用它们时不需要对其格式进行特别的处理。而专有I/O目标的格式则和特定的某一类设备类型相关。USB目标对象就是WDF定义的一种专有I/O目标对象，USB目标对象传送的请求使用WDF定义的URB（USB request blocks）格式，WDF提供专用的API来操作这些URB数据。随着WDF支持越来越多新的设备类型，则WDF也会扩展并定义越来越多的新的专有I/O目标类和操作他们的API。
 
 #### 1.2.3. PnP和Power管理模型-状态机
+[返回总目录](#contents) 
+
 提供了内建的对PnP和Power的管理，对状态的管理和迁移提供了缺省操作。  
 WDF驱动不需要自己实现一个复杂的状态机来跟踪PnP和电源状态来确定当状态发生变化时该采用什么动作。FrameWork自己内部有一个状态机为我们做了这一切并定义了需要实现的回调函数入口。驱动只要对自己关心的事件注册这些回调函数并在实现中加入对自己设备特定的处理，对其他的事件完全可以交给FrameWork去处理就好了。
 
-
+<a name="chapter-2" id="chapter-2"></a>
 ## ***Chapter 2. OSRFX2 - Step By Step***
+[返回总目录](#contents) 
+
 WDK中的OSRFX2例子在WDF出现之后已经基于WDF完全重写了。我们这里正是基于这个例子来循序渐进地了解一下如何开发一个基于WDF的KMDF驱动，以及在这个过程中我们需要注意哪些重要的知识点。
 
-### 2.1。 Step1 - 创建一个最简单的KMDF功能驱动。
+<a name="2.1" id="2.1"></a>
+### 2.1. Step1 - 创建一个最简单的KMDF功能驱动
+[返回总目录](#contents) 
 
 Step1要演示的是我们如何以最少的代码实现一个最简单但却可以正常工作的KMDF驱动，虽然它干不了什么事情。目前它包括以下两个主要功能：  
 
@@ -131,7 +195,9 @@ Step1要演示的是我们如何以最少的代码实现一个最简单但却可
 
 这个最小化的KMDF驱动只需要修改**DriverEntry**和**EvtDeviceAdd**这两个回调函数。WDF框架提供了其他所有缺省的功能，使之可以支持加载驱动并响应PNP和电源事件。我们可以安装，卸载，使能，去能该驱动，同时在OS挂起和恢复情况下该最小驱动也可以正常工作。
 
+<a name="2.1.1" id="2.1.1"></a>
 #### 2.1.1. 驱动入口点[DriverEntry]
+[返回总目录](#contents) 
 
 当一个驱动被加载到内存后第一个被FrameWork调用的函数，最为驱动程序的主入口，类似于用户态应用进程的main函数。根据WDF的定义我们需要在这个函数中执行创建驱动对象的动作。  
 对标准驱动来说，这个函数是非常简单的：FrameWork在调用这个函数时传入两个参数，参数一DriverObject是指向WDF封装的WDM的Driver对象的指针，该内存是由内核的IO Manager分配的，我们需要在DriverEntry中对它进行初始化。参数二RegistryPath给出了内核在系统注册表中为我们的驱动分配的单元的路径，我们可以在这个路径下去存储一些驱动相关的信息。这里我们没有使用第二个参数。
@@ -147,7 +213,9 @@ Step1要演示的是我们如何以最少的代码实现一个最简单但却可
 `                         WDF_NO_HANDLE`  
 `                        );`  
 
+<a name="2.1.2" id="2.1.2"></a>
 #### 2.1.2 添加新设备入口点[EvtDriverDeviceAdd]
+[返回总目录](#contents) 
 
 每当PnP Manager检测到一个新设备，系统都会调用EvtDeviceAdd函数。我们要做的工作就是在此函数中创建并初始化设备对象。
 
@@ -159,7 +227,9 @@ FrameWorks在调用该回调函数时传入两个参数，参数一是驱动对�
 Step1中创建设备对象时我们也没有设置对象属性 - `WDF_NO_OBJECT_ATTRIBUTES`, 在Step2中我们可以看到对属性更多的设置。  
 `status = WdfDeviceCreate(&DeviceInit, WDF_NO_OBJECT_ATTRIBUTES, &device);`
 
+<a name="2.2" id="2.2"></a>
 ### 2.2. Step2 - 准备设备对象
+[返回总目录](#contents) 
 
 在Step1里我们虽然创建了设备对象，但我们并不能对它做什么，甚至从用户程序的角度来说都没有办法访问我们的设备，更谈不上对设备发送I/O请求了。从Step3开始我们会增加支持接收I/O请求的代码，在Step2里我们要为Step3做好准备。这些准备主要包括以下三个方面：
 
@@ -167,7 +237,10 @@ Step1中创建设备对象时我们也没有设置对象属性 - `WDF_NO_OBJECT_
  - 为OSRFX2添加上下文 - 上下文会储存我们的驱动自己创建的用来接收I/O请求的I/O目标对象，以方便在设备的生命周期里进行访问。
  - 为OSRFX2准备I/O目标对象 - 创建并设置接收I/O请求的USB I/O目标对象。
 
+<a name="2.2.1" id="2.2.1"></a>
 #### 2.2.1. 为OSRFX2注册设备接口([device interface])
+[返回总目录](#contents) 
+
 KMDF驱动程序运行在内核态，为了让用户态的应用程序APP能够访问我们的驱动程序对象，主要是设备接口对象，驱动程序需要和操作系统协作在暴露出应用程序可以在用户态访问的接口，这就是[device interface]，俗称符号链接(symbolic link)。应用程序可以将设备接口的符号链接作为调用Win32 API的参数来和驱动打交道。更详细的描述可以参考[Using Device Interfaces]。
 
 具体的操作可分如下几部：
@@ -187,7 +260,10 @@ KMDF驱动程序运行在内核态，为了让用户态的应用程序APP能够�
  - 得到设备接口句柄后我们就可以调用[SetupDiGetDeviceInterfaceDetail]来获得设备文件的内核路径。    
  - 拿到设备文件路径后就可以调用[CreateFile]，CreateFile一旦成功该函数会返回打开文件的句柄，应用程序自此可以使用该文件句柄向设备发送I/O请求。  
 
+<a name="2.2.2" id="2.2.2"></a>
 #### 2.2.2 为OSRFX2添加上下文
+[返回总目录](#contents) 
+
 我们可以简单地将上下文空间理解为一块不可分页的内存区域。我们可以将自己驱动程序需要的一些变量定义在这个上下文数据区中，创建好之后我们可以通知WDF将其附加到WDF管理的框架对象中，以便在框架对象的生命周期中访问。更详细的内容我们可以参考[Framework Object Context Space].  
 在这里我们要给Step1中创建的设备对象添加上下文空间。上下文中需要存储的是可以接收I/O Control的WDFUSBDEVICE对象。WDFUSBDEVICE对象是一个USB I/O Target对象，一旦创建好并配置好后，在设备对象的生命周期中都是可访问的，所以我们可以将这个WDFUSBDEVICE对象保存下来并储存在自己创建的上下文空间里以便随时可以访问。
 
@@ -208,7 +284,9 @@ KMDF驱动程序运行在内核态，为了让用户态的应用程序APP能够�
  - 最后在调用WdfDeviceCreate时我们就不会再象Step1中那样采用缺省的属性参数了，将我们先前定义并初始化好的属性对象attributes作为第二个参数传入。这样FrameWork就知道需要将我们的上下文对象和设备对象建立起联系。
 `status = WdfDeviceCreate(&DeviceInit, &attributes, &device);`
 
+<a name="2.2.3" id="2.2.3"></a>
 #### 2.2.3 为OSRFX2准备I/O目标对象
+[返回总目录](#contents) 
 
 根据FrameWork的要求，我们必须在另一个重要的回调函数[EvtDevicePrepareHardware]中对驱动需要访问的Target对象进行初始化操作以确保驱动程序可以访问硬件设备，比如Step3中对OSRFX2发送I/O请求。因为USB Target对象的创建和配置是设备枚举后只需要执行一次的动作，所以按照FrameWork的要求，放在EvtDevicePrepareHardware里进行的初始化操作也是应该的。
 
@@ -232,12 +310,16 @@ KMDF驱动程序运行在内核态，为了让用户态的应用程序APP能够�
 `status = WdfUsbTargetDeviceSelectConfig(pDeviceContext->UsbDevice,WDF_NO_OBJECT_ATTRIBUTES,&configParams);`  
 `pDeviceContext->UsbInterface = configParams.Types.SingleInterface.ConfiguredUsbInterface; `  
 
-### 2.3. Step3 - USB同步控制传输.
+<a name="2.3" id="2.3"></a>
+### 2.3. Step3 - USB同步控制传输
+[返回总目录](#contents) 
 
 有了Step1和Step2的铺垫，从Step3开始我们可以接触一个真正可以工作的驱动会为我们的使用者-应用程序提供什么样的功能。其实说起来也简单，驱动为应用程序提供的服务最主要的无非是实现一些I/O请求来驱动硬件执行一些操作，这也是我们之所以叫“驱动”之所在。  
 我们已经知道驱动处理的I/O请求有三种类型：Read请求,Write请求和Device I/O Control请求。Step3中演示的如何为与设备相关的特定I/O控制请求编写同步处理的代码。
 
-#### 2.3.1. 注册I/O控制码*
+<a name="2.3.1" id="2.3.1"></a>
+#### 2.3.1. 注册I/O控制码
+[返回总目录](#contents) 
 
 Step3里要实现的控制是驱动OSRFX2目标板上的一组LED灯，这是一个与OSRFX2这个设备相关的特定控制请求，在USB里常常叫做Vendor Request。也就是说这些请求是设备制造商（OSR）自己定义的，用以区别USB协议中规定的标准请求。  
 在Windows世界里，所有的I/O请求都通过I/O控制码进行定义。用户程序通过调用[DeviceIoControl]，传入I/O控制码（I/O Control Codes）来通知驱动响应特定的请求。详细的描述可以参考[Using I/O Control Codes]。  
@@ -253,7 +335,10 @@ Step3里要实现的控制是驱动OSRFX2目标板上的一组LED灯，这是一
 `WDF_IO_QUEUE_CONFIG                 ioQueueConfig;`  
 我们可以根据自己的需要对不同的IO请求创建不同功能的队列来进行处理。在Step3这个例子里为简单起见我们只创建了一个缺省的队列。所谓缺省队列就是说，一旦你为你的设备创建了一个缺省的I/O队列，FrameWork会把所有的I/O请求都放到这个缺省队列里来进行处理，除非你为这个I/O请求创建了其他的处理队列。
 
+<a name="2.3.2" id="2.3.2"></a>
 #### 2.3.2. 添加队列
+[返回总目录](#contents) 
+
 为了接收用户程序发来的I/O请求，所有的WDF驱动都需要创建自己的队列来缓存I/O请求。初始化缺省队列我们可以调用WDF的宏`WDF_IO_QUEUE_CONFIG_INIT_DEFAULT_QUEUE `。第二个参数传入WdfIoQueueDispatchParallel表明这个队列不会因为我们的I/O处理函数而阻塞。有关I/O分发的机制可以参考[Dispatching Methods for I/O Requests]。  
 `WDF_IO_QUEUE_CONFIG_INIT_DEFAULT_QUEUE(&ioQueueConfig, WdfIoQueueDispatchParallel);`  
 向队列注册IO Control的回调函数入口[EvtIoDeviceControl]:
@@ -263,7 +348,10 @@ OK, 接下来我们就可以调用[WdfIoQueueCreate]来创建这个队列了。
 
 以上工作做好后，当应用程序调用[DeviceIoControl]并传入`IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY`来设置LED bar的亮和灭的时候，我们的驱动程序的EvtIoDeviceControl函数就会被FrameWork激活回调。具体的操作就看我们在EvtIoDeviceControl里的处理代码了。因为应用APP在调用DeviceIoControl的时候除了指明IO控制码还需要给定一些其他的参数。对于设置LED bar来说就是要指定点亮或者熄灭8盏灯中的哪一盏。下面我们就来看看用户态的APP和内核态的驱动是怎样传递这些内容的以及我们的驱动又是怎样将这些内容传递给真正的执行体--"设备"的。
 
+<a name="2.3.3" id="2.3.3"></a>
 #### 2.3.3. 处理I/O控制
+[返回总目录](#contents) 
+
 现在我们来看一下EvtIoDeviceControl中是如何处理应用发起的`IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY`请求的。
 [EvtIoDeviceControl]一共有五个参数，都是入(`_In_`)参。因为`IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY`操作目的是设置设备的LED bar，所以相对于驱动，没有需要传出给应用的内容，所以没有用到OutputBufferLength；应用有要传给驱动设置LEDbar的内容，大小是一个UCHAR，也就是一个字节，所以InputBufferLength是有效的。我们可以在EvtIoDeviceControl里判断一下，如果太小说明有问题。  
 `if(InputBufferLength < sizeof(UCHAR)) {`  
@@ -294,16 +382,24 @@ PC和OSRFX2设备之间设置LEDbar的命令采用的是EP0上的Setup传输。
 
 在Step4里我们会看到异步I/O的例子。
 
-### 2.4. Step4 - USB异步批量传输.
+<a name="2.4" id="2.4"></a>
+### 2.4. Step4 - USB异步批量传输
+[返回总目录](#contents) 
+
 Step4里会介绍I/O请求的其他两种类型：Read请求和Write请求。OSRFX2设备使用两个批量传输端点和主机进行读写操作。而Step4会展示驱动如何以异步的方式处理Read和Write请求，并和OSRFX2的批量传输端点交互。
 
+<a name="2.4.1" id="2.4.1"></a>
 #### 2.4.1. 注册回调函数
+[返回总目录](#contents) 
+
 和I/O Control请求不同，在用户态的用户程序调用这两个请求不是使用的[DeviceIoControl],对应的使用的是[ReadFile]和[WriteFile]。相应的，在驱动里我们会在队列上注册另外两个回调函数[EvtIoRead]和[EvtIoWrite]。
 修改[EvtDeviceAdd]函数，增加对以上两个回调的注册：  
 `ioQueueConfig.EvtIoRead = EvtIoRead;`  
 `ioQueueConfig.EvtIoWrite = EvtIoWrite;`  
 
+<a name="2.4.2" id="2.4.2"></a>
 #### 2.4.2. 添加I/O Target对象
+[返回总目录](#contents) 
 
 对于OSRFX2，写时使用EP6(Bulk-OUT)，读时使用EP8(Bulk-IN)。在OSRFX2的配置中这两个端点在接口(Interface)中的顺序分别为1和2(顺序从0开始，0已经留给了EP1做中断传输)。
 
@@ -319,7 +415,10 @@ Step4里会介绍I/O请求的其他两种类型：Read请求和Write请求。OSR
 `pDeviceContext->BulkReadPipe = WdfUsbInterfaceGetConfiguredPipe(pDeviceContext->UsbInterface,BULK_IN_ENDPOINT_INDEX,NULL);`  
 `pDeviceContext->BulkWritePipe = WdfUsbInterfaceGetConfiguredPipe(pDeviceContext->UsbInterface,BULK_OUT_ENDPOINT_INDEX,NULL);`  
 
+<a name="2.4.3" id="2.4.3"></a>
 #### 2.4.3. 异步I/O请求处理
+[返回总目录](#contents) 
+
 异步读写的流程基本上是一致的，我们仅以读为例进行介绍。  
 当用户程序发起的Read请求被I/O管理器发送给FrameWork时，FrameWork先将该请求入队列，然后FrameWork呼叫[EvtIoRead]回调函数触发驱动来处理该请求。  
 
