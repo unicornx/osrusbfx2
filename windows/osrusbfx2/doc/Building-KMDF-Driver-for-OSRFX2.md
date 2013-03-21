@@ -165,7 +165,7 @@ Step1中创建设备对象时我们也没有设置对象属性 - `WDF_NO_OBJECT_
 
  - 为OSRFX2注册设备接口类([device interface]) - 这样应用程序就可以通过我们的驱动访问我们的设备了。
  - 为OSRFX2添加上下文 - 上下文会储存我们的驱动自己创建的用来接收I/O请求的I/O目标对象，以方便在设备的生命周期里进行访问。
- - 为OSRFX2准备硬件IO - 创建接收I/O请求的USB I/O目标对象。
+ - 为OSRFX2准备I/O目标对象 - 创建并设置接收I/O请求的USB I/O目标对象。
 
 #### 2.2.1. 为OSRFX2注册设备接口([device interface])
 KMDF驱动程序运行在内核态，为了让用户态的应用程序APP能够访问我们的驱动程序对象，主要是设备接口对象，驱动程序需要和操作系统协作在暴露出应用程序可以在用户态访问的接口，这就是[device interface]，俗称符号链接(symbolic link)。应用程序可以将设备接口的符号链接作为调用Win32 API的参数来和驱动打交道。更详细的描述可以参考[Using Device Interfaces]。
@@ -208,7 +208,7 @@ KMDF驱动程序运行在内核态，为了让用户态的应用程序APP能够�
  - 最后在调用WdfDeviceCreate时我们就不会再象Step1中那样采用缺省的属性参数了，将我们先前定义并初始化好的属性对象attributes作为第二个参数传入。这样FrameWork就知道需要将我们的上下文对象和设备对象建立起联系。
 `status = WdfDeviceCreate(&DeviceInit, &attributes, &device);`
 
-#### 2.2.3 为OSRFX2准备硬件I/O
+#### 2.2.3 为OSRFX2准备I/O目标对象
 
 根据FrameWork的要求，我们必须在另一个重要的回调函数[EvtDevicePrepareHardware]中对驱动需要访问的Target对象进行初始化操作以确保驱动程序可以访问硬件设备，比如Step3中对OSRFX2发送I/O请求。因为USB Target对象的创建和配置是设备枚举后只需要执行一次的动作，所以按照FrameWork的要求，放在EvtDevicePrepareHardware里进行的初始化操作也是应该的。
 
@@ -232,10 +232,10 @@ KMDF驱动程序运行在内核态，为了让用户态的应用程序APP能够�
 `status = WdfUsbTargetDeviceSelectConfig(pDeviceContext->UsbDevice,WDF_NO_OBJECT_ATTRIBUTES,&configParams);`  
 `pDeviceContext->UsbInterface = configParams.Types.SingleInterface.ConfiguredUsbInterface; `  
 
-### 2.3. Step3 - USB控制传输.
+### 2.3. Step3 - USB同步控制传输.
 
 有了Step1和Step2的铺垫，从Step3开始我们可以接触一个真正可以工作的驱动会为我们的使用者-应用程序提供什么样的功能。其实说起来也简单，驱动为应用程序提供的服务最主要的无非是实现一些I/O请求来驱动硬件执行一些操作，这也是我们之所以叫“驱动”之所在。  
-我们已经知道驱动处理的I/O请求有三种类型：Read请求,Write请求和Device I/O Control请求。Step3中演示的是控制请求，而且演示了如何为与设备相关的特定控制请求编写处理代码。
+我们已经知道驱动处理的I/O请求有三种类型：Read请求,Write请求和Device I/O Control请求。Step3中演示的如何为与设备相关的特定I/O控制请求编写同步处理的代码。
 
 #### 2.3.1. 注册I/O控制码*
 
@@ -294,11 +294,11 @@ PC和OSRFX2设备之间设置LEDbar的命令采用的是EP0上的Setup传输。
 
 在Step4里我们会看到异步I/O的例子。
 
-### 2.4. Step4 - USB批量传输.
-Step4里会介绍I/O请求的其他两种类型：Read请求和Write请求。和I/O Control请求不同，在用户态的用户程序调用这两个请求不是使用的[DeviceIoControl],对应的使用的是[ReadFile]和[WriteFile]。
+### 2.4. Step4 - USB异步批量传输.
+Step4里会介绍I/O请求的其他两种类型：Read请求和Write请求。OSRFX2设备使用两个批量传输端点和主机进行读写操作。而Step4会展示驱动如何以异步的方式处理Read和Write请求，并和OSRFX2的批量传输端点交互。
 
 #### 2.4.1. 注册回调函数
-相应的，在驱动里我们会在队列上注册另外两个回调函数[EvtIoRead]和[EvtIoWrite]。
+和I/O Control请求不同，在用户态的用户程序调用这两个请求不是使用的[DeviceIoControl],对应的使用的是[ReadFile]和[WriteFile]。相应的，在驱动里我们会在队列上注册另外两个回调函数[EvtIoRead]和[EvtIoWrite]。
 修改[EvtDeviceAdd]函数，增加对以上两个回调的注册：  
 `ioQueueConfig.EvtIoRead = EvtIoRead;`  
 `ioQueueConfig.EvtIoWrite = EvtIoWrite;`  
@@ -307,19 +307,44 @@ Step4里会介绍I/O请求的其他两种类型：Read请求和Write请求。和
 
 对于OSRFX2，写时使用EP6(Bulk-OUT)，读时使用EP8(Bulk-IN)。在OSRFX2的配置中这两个端点在接口(Interface)中的顺序分别为1和2(顺序从0开始，0已经留给了EP1做中断传输)。
 
-修改`DEVICE_CONTEXT`结构，增加两个WDFUSBPIPE对象，用来存储Read和Write的I/O Target对象。
-
+修改`DEVICE_CONTEXT`结构，增加两个WDFUSBPIPE对象，用来存储Read和Write的I/O Target对象。  
+`typedef struct _DEVICE_CONTEXT {`  
+`  WDFUSBDEVICE      UsbDevice;`  
+`  WDFUSBINTERFACE   UsbInterface;`  
+`  WDFUSBPIPE        BulkReadPipe;`  
+`  WDFUSBPIPE        BulkWritePipe;`  
+`} DEVICE_CONTEXT, *PDEVICE_CONTEXT;`  
 
 修改EvtDevicePrepareHardware函数，获取WDFUSBPIPE的句柄。因为我们先前已经创建了WDFUSBDEVICE并获取了设备对象的WDFUSBINTERFACE对象，此时可以直接从WDFUSBINTERFACE对象里直接得到WDFUSBPIPE。
 `pDeviceContext->BulkReadPipe = WdfUsbInterfaceGetConfiguredPipe(pDeviceContext->UsbInterface,BULK_IN_ENDPOINT_INDEX,NULL);`  
 `pDeviceContext->BulkWritePipe = WdfUsbInterfaceGetConfiguredPipe(pDeviceContext->UsbInterface,BULK_OUT_ENDPOINT_INDEX,NULL);`  
 
-
 #### 2.4.3. 异步I/O请求处理
+异步读写的流程基本上是一致的，我们仅以读为例进行介绍。  
+当用户程序发起的Read请求被I/O管理器发送给FrameWork时，FrameWork先将该请求入队列，然后FrameWork呼叫[EvtIoRead]回调函数触发驱动来处理该请求。  
 
+得到I/O管理器传给驱动的输入数据后，驱动首先调用WdfUsbTargetPipeFormatRequestForRead对准备发送给PIPE的读请求数据进行格式化。  
 
+接下来驱动调用WdfRequestSetCompletionRoutine并注册另一个回调函数EvtRequestReadCompletionRoutine，该回调函数会在PIPE完成请求并返回时被触发。 
+`WdfRequestSetCompletionRoutine(Request,EvtRequestReadCompletionRoutine,pipe); `  
 
+最后驱动就可以调用WdfRequestSend给PIPE目标对象发送请求了，这里有两点需要注意一下，第一，驱动调用WdfRequestSend时给出的发送请求选项是WDF_NO_SEND_OPTIONS，表示没有特殊的设置，则在缺省情况下，该请求类型是异步，并且没有超时等待。第二, 因为WdfRequestSend的第二个参数是一个WDFIOTARGET对象，所以我们要调用WdfUsbTargetPipeGetIoTarget从PIPE对象里获取一个I/O Target的句柄，WDFUSBPIPE本身并不是一个WDFIOTARGET对象。
+`ret = WdfRequestSend(Request, WdfUsbTargetPipeGetIoTarget(pipe), WDF_NO_SEND_OPTIONS);`  
 
+因为是异步发送，所以WdfRequestSend会立即返回，请注意以下代码。只有当WdfRequestSend返回不成功的时候，驱动才会调用WdfRequestCompleteWithInformation结束本次请求处理。如果WdfRequestSend返回TRUE，则说明I/O管理器已经接受了我们的请求并发送给设备，则根据异步发送的机制规定，结束请求会话的WdfRequestCompleteWithInformation调用应该在EvtRequestReadCompletionRoutine里得到执行。
+
+`    if (ret == FALSE) {`  
+`        status = WdfRequestGetStatus(Request);`  
+`        goto Exit;`  
+`    } else {`  
+`        return;`  
+`    }`  
+`Exit:`  
+`    WdfRequestCompleteWithInformation(Request, status, 0);`  
+
+剩下的工作就是实现完成回调函数EvtRequestReadCompletionRoutine了，没有什么太多的工作要做，记得别忘记调用WdfRequestCompleteWithInformation并返回Read的结果就是了。
+
+值得一提的是处理I/O请求时，对于Applications而言，其调用Windows API的时候有同步和异步调用的区别。驱动调用FrameWork的API发送I/O请求时也分同步调用和异步调用。但这两者之间实际上并无联系。在驱动内部并不知道当前从应用程序传递进来的的I/O请求是同步方式还是异步方式，驱动只是根据自己的需要由自己决定向I/O目标采用何种方式发起I/O请求。另一方面，从Windows的角度来看，在Windows的I/O模型中，所有的I/O操作都是异步的。对于应用程序和WDF驱动来说，所谓的同步和异步概念都是由I/O管理器封装并提供出来的一种方便大家使用的操作方式，在Windows内核系统内部都是采用异步方式处理的。
 
 
 # 参考文献：  
@@ -360,6 +385,10 @@ http://channel9.msdn.com/Shows/Going+Deep/Doron-Holan-Kernel-Mode-Driver-Framewo
 [WdfRequestRetrieveInputMemory]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff550015(v=vs.85).aspx
 [WdfUsbTargetDeviceSendControlTransferSynchronously]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff550104(v=vs.85).aspx
 [WdfRequestCompleteWithInformation]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff549948(v=vs.85).aspx
+[WdfRequestSend]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff550027(v=vs.85).aspx
+[WdfUsbTargetPipeGetIoTarget]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551146(v=vs.85).aspx
+
+
 
 [DriverEntry]: http://msdn.microsoft.com/zh-cn/library/windows/hardware/ff544113(v=vs.85).aspx
 [EvtDriverDeviceAdd]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff541693(v=vs.85).aspx
