@@ -26,7 +26,7 @@ SOURCES=driver.c \
 #
 # Comment the below line to disable tracing. All the debug traces
 # will be sent to the kernel-debugger.
-#ENABLE_EVENT_TRACING=1
+ENABLE_EVENT_TRACING=1
 
 !IFDEF ENABLE_EVENT_TRACING
 
