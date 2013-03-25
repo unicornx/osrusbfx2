@@ -541,9 +541,24 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 建议仔细阅读DDMWDF第11章的“How to Run a Software Trace Session
 ”一节。写得很详细，我这里就不赘述了。如果大家实在需要我翻译成中文，请告之:)
 
+<a name="2.6" id="2.6"></a>
+### 2.6. Final -  最终版本
+[返回总目录](#contents) 
+
+<a name="2.6.1" id="2.6.1"></a>
+#### 2.6.1. 
+[返回总目录](#contents) 
 
 
+在您的驱动程序中帮助防止缓冲区溢出，使用安全字符串函数
+http://www.microsoft.com/china/whdc/driver/tips/SafeString.mspx
+
+Stampinf: http://msdn.microsoft.com/en-us/library/windows/hardware/ff552786(v=vs.85).aspx
+
+<a name="references" id="references"></a>
 # 参考文献：  
+[返回总目录](#contents)  
+
 http://www.ituring.com.cn/article/554  
 http://channel9.msdn.com/Shows/Going+Deep/Doron-Holan-Kernel-Mode-Driver-Framework  
 DDMWDF: [Developing Drivers with the Microsoft Windows Driver Foundation](http://flylib.com/books/en/3.141.1.1/1/)  
