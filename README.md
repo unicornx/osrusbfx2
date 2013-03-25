@@ -16,7 +16,9 @@ Based on MS WDK osrusbfx2 samples + CY001 learning board, added more with my ide
 * windows  - Windows版本的源代码和相关文件。已经过修改以适配CY001与实际的OSRFX2学习板的不同。
  * drivers - 驱动安装包。目前只提供了x86的版本。[README](./windows/drivers/README.md)
  * drvinst - 驱动安装和卸载程序，演示DIFxAPI和SetupAPI的典型用例。[README](./windows/drvinst/README.md)
- * osrusbfx2 - WDK的osrusbfx2例子，经过修改适配CY001。[README](./windows/osrusbfx2/README.md)
+ * osrusbfx2 - WDK的osrusbfx2例子，经过修改适配CY001。
+     * [README](./windows/osrusbfx2/README.md)
+     * [Step by Step, 为OSRFX2创建一个KMDF驱动程序](./windows/osrusbfx2/doc/Building-KMDF-Driver-for-OSRFX2.md): 一个基于osrusbfx2例子的小教程。  
 
 * linux - 鄙人正在研究Linux上的OSRFX2，如果有更新会放上来。（TBD）
 
