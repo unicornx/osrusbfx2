@@ -36,6 +36,8 @@
 [2.4.3. 异步I/O请求处理](#2.4.3)  
 
 [**2.5. Step5 -  为驱动加上日志跟踪**](#2.5)  
+[2.5.1. Windows软件跟踪预处理器](#2.5.1)  
+[2.5.2. 为驱动添加支持WPP](#2.5.2)  
 
 <a name="chapter-1" id="chapter-1"></a>
 ## ***Chapter 1. 基础知识***
@@ -457,10 +459,10 @@ Step4里会介绍I/O请求的其他两种类型：Read请求和Write请求。OSR
 #### 2.5.1. Windows软件跟踪预处理器
 [返回总目录](#contents) 
 
-Windows软件跟踪预处理器([Windows software trace PreProcessor])，简称WPP，是一种基于Windows事件跟踪(Event Tracing for Windows, 简称ETW)机制，但更灵活，功能更强大的系统记录日志的方法。它有以下几个突出的优点。  
+Windows软件跟踪预处理器([Windows software trace PreProcessor])，简称WPP，是微软提供的集成在Windows驱动开发包SDK里的一套预编译工具软件。它基于Windows事件跟踪(Event Tracing for Windows, 简称ETW)机制，提供了一套更灵活，功能更强大的系统记录日志的方法。它有以下几个突出的优点。  
 
- - 1. 动态和灵活的控制 可以实时地打开或者关闭跟踪；可以选择性地设置日志的级别并选择全部或者部分进行跟踪；可以在一个会话中选择跟踪多个不同来源的日志，比如同时跟踪我们的驱动和操作系统的日志，并同时查看我们驱动的日志和系统日志发生的事件的时间顺序，来供我们了解整体发生的情况并做出更好的判断。  
- - 2. 可以实时查看，还可以同时记录在本地磁盘文件。  
+ - 1. WPP提供了一套动态和灵活的控制机制，可以实时地打开或者关闭跟踪；可以选择性地设置日志的级别并选择全部或者部分进行跟踪；可以在一个会话中选择跟踪多个不同来源的日志，比如同时跟踪我们的驱动和操作系统的日志，并同时查看我们驱动的日志和系统日志发生的事件的时间顺序，来供我们了解整体发生的情况并做出更好的判断。  
+ - 2. 可以实时查看，还可以同时记录在本地磁盘文件。在SDK中，Windows缺省提供了一套可用于进行实时查看和记录日志的软件。我们这里以[TraceView]为例介绍下面的内容，TraceView是有图形界面的，当然还有其他基于命令行的工具。微软甚至提供了一套库和API可以允许程序员开发和定制自己的系统日志跟踪工具。  
  - 3. WPP的跟踪消息富含大量有用的信息，WPP的预处理器在编译时还会在我们的跟踪日志上帮助我们加上日志发生点的函数名，文件名和行号，以及时间戳。参见下图，在TraceView的界面上我们可以选择日志中显示那些列信息，其中就包括方才我说的内容。TraceView上还可以看到内核的一些信息，包括当前代码在哪个CPU上执行（列“CPU#”）等等，我的这台PC是双核的，所以有0和1两个CPU代号。  
 ![WPP的日志](./images/TraceView.PNG)  
  - 4. 采用WPP的机制还可以在让用户提供日志记录时避免泄露不想让别人看到的信息。因为WPP产生的日志文件(etl)文件是二进制格式的，需要和跟踪格式模板文件（Trace Format File，tmf文件）配合起来才能解释成人可以读懂的文本，而TMF文件只保存在驱动开发人员的手里，所以采用WPP机制产生的日志具有一定的私密性。  
@@ -469,12 +471,42 @@ Windows软件跟踪预处理器([Windows software trace PreProcessor])，简称W
  - 7. 更有趣的是最新的WPP机制不光可以支持内核模块，比如内核驱动打印日志，也可以支持用户态的程序和动态链接库，这样我们在Windows上就采用一种统一的方式跟踪日志了。感兴趣的人也可以尝试一下。
 
 <a name="2.5.2" id="2.5.2"></a>
-#### 2.5.2. 支持WPP
-[返回总目录](#contents) 
+#### 2.5.2. 为驱动添加支持WPP
+[返回总目录](#contents)  
+
 前面了解了WPP的优点，现在让我们来看看如何一步一步地在我们驱动的代码中支持WPP进行日志跟踪。
 
-##### 2.5.2.1. 在工程中添加对WPP的调用
-我们之所以称WPP为预处理器，主要是因为WPP本身的确是一套集成在Windows驱动开发包里的预处理软件工具。我们必须要在自己的工程项目中显示地调用这个工具它才会工作。WPP会对我们的每个源文件都进行预处理，插入与系统日志相关的代码并参与编译。
+##### 2.5.2.1. 定义Control GUID和跟踪标志
+对于记录日志跟踪的软件来说，比如TraceView，它需要在一个跟踪会话中区分日志发生的来源。WPP定义使用GUID来标识这些源。一个GUID代表一个源，WPP叫它Control GUID。而且我们知道GUID的特点就是这些源ID不可能是重复的。  
+一个驱动模块(sys)可以是一个源，我们也可以在一个驱动模块中定义多个源。多个驱动模块也可以共用一个GUID。当然最常见的情况还是一个驱动模块对应一个GUID。
+
+跟踪标志(Trace Flags)用来在一个Control GUID中区分不同的跟踪类型，具体根据开发人员自己的需求定义，比如根据错误的严重程度等等。一个源可以定义最多32个跟踪标志。
+
+WPP要求每个驱动模块为它的每个Control GUID和对应的Trace Flags定义一个叫`WPP_CONTROL_GUIDS`的宏，这个宏定义的位置需要最靠前，要在包含TMH文件语句和其他WPP宏调用语句之前。所以我们可以将这个`WPP_CONTROL_GUIDS`宏定义在一个通用的跟踪头文件中并让每个源文件包含它。譬如final例子中的trace.h文件。我们定义这个宏的时候可以使用WPP提供的另一个宏方法`WPP_DEFINE_CONTROL_GUID`。具体可以参考final例子的\osrusbfx2\kmdf\sys\final\trace.h
+
+`#define WPP_CONTROL_GUIDS \`  
+`    WPP_DEFINE_CONTROL_GUID(OsrUsbFxTraceGuid,(d23a0c5a,d307,4f0e,ae8e,E2A355AD5DAB), \`  
+`        WPP_DEFINE_BIT(DBG_INIT)             /* bit  0 = 0x00000001 */ \`  
+`        WPP_DEFINE_BIT(DBG_PNP)              /* bit  1 = 0x00000002 */ \`  
+`        WPP_DEFINE_BIT(DBG_POWER)            /* bit  2 = 0x00000004 */ \`  
+`        WPP_DEFINE_BIT(DBG_WMI)              /* bit  3 = 0x00000008 */ \`  
+`        WPP_DEFINE_BIT(DBG_CREATE_CLOSE)     /* bit  4 = 0x00000010 */ \`  
+`        WPP_DEFINE_BIT(DBG_IOCTL)            /* bit  5 = 0x00000020 */ \`  
+`        WPP_DEFINE_BIT(DBG_WRITE)            /* bit  6 = 0x00000040 */ \`  
+`        WPP_DEFINE_BIT(DBG_READ)             /* bit  7 = 0x00000080 */ \`  
+`        )`  
+第一个参数是Control GUID的名字，这个名字在定义.ctl文件时会用上；第二个参数是形如(aaaaaaaa, bbbb, cccc, dddd, eeeeeeeeeeee)表示的GUID字符串值；剩下的就是最少1个，最多32个用另一个宏`WPP_DEFINE_BIT`定义的跟踪标志。
+
+##### 2.5.2.2. 包含TMH文件
+WPP还定义个一个概念，就是TMH，它是Trace Message Header的简称，翻译过来就是跟踪消息头文件。这个文件不是由我们提供，而是由WPP在预编译过程中自己产生的，WPP对每一个源文件产生一个同名的TMH文件并放在编译目标生成目录文件夹下。
+我们唯一要做的事情就是在为每个源文件都写一行语句来包含同名的TMH文件，譬如 \osrusbfx2\kmdf\sys\step5\step5.c
+`#include "step5.tmh"`
+也可以同时参考final例子，它的每个源文件的头上都有一行对对应的TMH的包含调用。
+
+要注意的是调用包含这个TMH文件的位置必须是要在WPP_CONTROL_GUIDS宏定义之后，并在其他所有WPP宏调用之前，其他所有WPP宏调用也就是后面2.5.2.4要说的那些WPP宏调用。只有这样WPP在做预编译时才会扫描整个源文件，并为每处调用日志打印的地方生成一个插入了Control ID和跟踪标志的替代宏并存储在TMH文件中。接下来编译器在编译源文件时只要看到源文件包含了对应的TMH文件就会施展不为人知的魔法，为我们创建满足ETW日志要求的函数调用了。
+
+##### 2.5.2.3. 在工程中添加对WPP的调用
+我们前面说过之所以称WPP为预处理器，主要是因为WPP本身的确是一套集成在Windows驱动开发包里的预处理软件工具。我们必须要在自己的工程项目中显示地调用这个工具它才会工作。WPP会对我们的每个源文件都进行预处理，插入与系统日志相关的代码并参与编译。
 以Step5为例，打开\osrusbfx2\kmdf\sys\step5目录下的sources文件，我们会看到和前面四个Step1~Step2不同的新代码如下：  
 `RUN_WPP= $(SOURCES)                                \`  
 `         -km                                       \`  
@@ -484,26 +516,23 @@ Windows软件跟踪预处理器([Windows software trace PreProcessor])，简称W
 第一个参数指明希望作用的文件对象，这里用`$(SOURCES)`表明我们希望对工程定义的所有源文件进行预处理。
 
 - `-km`:用来表明我们这里要处理的是一个KMDF驱动，如果不写的话则缺省为用户态程序进行预处理。  
-- `-ctl`: 用来快速定义`WPP_CONTROL_GUIDS`的宏值，这个宏的值是一个GUID，用来指明是哪个模块提供的日志记录，这个GUID对于在一个会话中有多个日志提供者的情况下可用于标识日志的提供者。我们也可以通过代码对`WPP_CONTROL_GUIDS`这个宏进行更详细的定制，那样就可以不定义`-ctl`。更详细的描述参考2.5.2.3。  
+- `-ctl`: 用来快速定义`WPP_CONTROL_GUIDS`的宏值。正如2.5.2.1所介绍的，我们也可以通过代码对`WPP_CONTROL_GUIDS`这个宏进行更详细的定制，那样就可以不定义`-ctl`。但如果我们想使用WPP定义的缺省的Trace Flags级别（只包括Error, Unusual和Noise三级）则可以在这里快速定义。 
 - `-func`:这个和我们在2.5.1中介绍的WPP的优点中的第6条有关。在我们需要打印日志的地方我们会插入我们的日志打印函数，比如DbgPrint或者是自己定义的一个日志答应函数。WPP作为一个预处理器会遍历我们所有的源文件并找到我们调用日志打印函数的地方并对其进行预处理，替换成合适的ETW的函数调用。问题是WPP如何知道我们的日志打印函数是什么呢，这里的`-func`就是用来告诉WPP我们代码里的日志打印函数是什么样子的。如果我们不想自己定义也可以调用一个WPP预定义的日志打印函数-DoTraceMessage，如果这样就可以不定义`-func`。  
-- `-gen`: 指示WPP预处理器使用什么模板生成TMH文件，这里是km-WdfDefault.tpl，这个文件是WDK缺省提供的。每个源文件都会对应生成一个TMH文件，这个文件会在下一节中用到。
+- `-gen`: 指示WPP预处理器使用什么模板生成TMH文件，这里是km-WdfDefault.tpl，这个模板文件是WDK缺省提供的。
 
 更详细的预处理器的语法可以参考[WPP Preprocessor]
 
-##### 2.5.2.2. 包含TMH文件
-很简单但是必须的。为每个源文件都包含对应一个同名的TMH文件，WPP在预处理源文件时需要使用。
-
-##### 2.5.2.3. 定义Control GUID和跟踪标志
-
 ##### 2.5.2.4. WPP的初始化和清除
+除了以上的操作，WPP还需要我们在驱动代码中显式地对WPP进行初始化和清除。
+初始化调用的WPP宏为`WPP_INIT_TRACING`。WPP要求我们在驱动加载的最初阶段就调用WPP的初始化。并且保证在调用初始化之前不要进行日志打印。所以我们要在驱动的入口点函数DriverEntry的最前面对WPP进行初始化。
+`NTSTATUS DriverEntry ( ... )`  
+`{`  
+`    WPP_INIT_TRACING( DriverObject, RegistryPath );`  
+`...` // 其他驱动初始化代码，并可以开始日志打印。   
+`}`  
 
-
-
-Easy Migration from Debug Print Statements
-
-在驱动编程学习中，往往需要通过DbgPrint或者KdPrint来输出调试信息，对于Check版本，KdPrint只是DbgPrint的一个宏定义，而对于Free版本，KdPrint将被优化掉。这些输出信息可以通过DebugView对内核的监控来看到。
-
-KdPrint is identical to the DbgPrint routine in code that is compiled in a checked build environment. This routine has no effect if compiled in a free build environment. Only kernel-mode drivers can call the KdPrint routine.
+WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一旦这个宏被调用则所有的日志跟踪语句将不起作用。所以我们最好仔细确认并在最靠近驱动卸载的时间点上调用它。
+请注意如果我们在代码中开启了WPP跟踪，则我们要确保在驱动卸载时清除WPP，否则会导致驱动下次加载失败。所以我们看到step5例子中有两处调用了`WPP_CLEANUP`，一处是驱动正常卸载时会回调EvtDriverContextCleanup，还有一处是在DriverEntry里驱动对象创建失败的时候。
 
 
 # 参考文献：  
@@ -530,6 +559,7 @@ DDMWDF: [Developing Drivers with the Microsoft Windows Driver Foundation](http:/
 [devnode]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff556277(v=vs.85).aspx#wdkgloss.devnode
 [Windows software trace PreProcessor]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff556204(v=vs.85).aspx
 [WPP Preprocessor]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff556201(v=vs.85).aspx
+[TraceView]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff553872(v=vs.85).aspx
 
 [SetupDiGetClassDevs]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551069(v=vs.85).aspx
 [SetupDiEnumDeviceInterfaces]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551015(v=vs.85).aspx
