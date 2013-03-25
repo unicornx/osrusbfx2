@@ -38,6 +38,7 @@
 [**2.5. Step5 -  为驱动加上日志跟踪**](#2.5)  
 [2.5.1. Windows软件跟踪预处理器](#2.5.1)  
 [2.5.2. 为驱动添加支持WPP](#2.5.2)  
+[2.5.3. 使用TraceView观察WPP日志打印](#2.5.3)  
 
 <a name="chapter-1" id="chapter-1"></a>
 ## ***Chapter 1. 基础知识***
@@ -533,6 +534,13 @@ WPP还定义个一个概念，就是TMH，它是Trace Message Header的简称，
 
 WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一旦这个宏被调用则所有的日志跟踪语句将不起作用。所以我们最好仔细确认并在最靠近驱动卸载的时间点上调用它。
 请注意如果我们在代码中开启了WPP跟踪，则我们要确保在驱动卸载时清除WPP，否则会导致驱动下次加载失败。所以我们看到step5例子中有两处调用了`WPP_CLEANUP`，一处是驱动正常卸载时会回调EvtDriverContextCleanup，还有一处是在DriverEntry里驱动对象创建失败的时候。
+
+<a name="2.5.3" id="2.5.3"></a>
+#### 2.5.3. 使用TraceView观察WPP日志打印
+[返回总目录](#contents)  
+建议仔细阅读DDMWDF第11章的“How to Run a Software Trace Session
+”一节。写得很详细，我这里就不赘述了。如果大家实在需要我翻译成中文，请告之:)
+
 
 
 # 参考文献：  
