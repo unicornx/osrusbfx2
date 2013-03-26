@@ -18,12 +18,12 @@
 
 [**2.1. Step1 - 创建一个最简单的KMDF功能驱动**](#2.1)  
 [2.1.1. 驱动入口点DriverEntry](#2.1.1)  
-[2.1.2 添加新设备入口点EvtDriverDeviceAdd](#2.1.2)  
+[2.1.2. 添加新设备入口点EvtDriverDeviceAdd](#2.1.2)  
 
 [**2.2. Step2 - 准备设备对象**](#2.2)  
 [2.2.1. 为OSRFX2注册设备接口(device interface](#2.2.1)  
-[2.2.2 为OSRFX2添加上下文](#2.2.2)  
-[2.2.3 为OSRFX2准备I/O目标对象](#2.2.3)  
+[2.2.2. 为OSRFX2添加上下文](#2.2.2)  
+[2.2.3. 为OSRFX2准备I/O目标对象](#2.2.3)  
 
 [**2.3. Step3 - USB同步控制传输**](#2.3)  
 [2.3.1. 注册I/O控制码](#2.3.1)  
@@ -36,7 +36,7 @@
 [2.4.3. 异步I/O请求处理](#2.4.3)  
 
 [**2.5. Step5 -  为驱动加上日志跟踪**](#2.5)  
-[2.5.1. Windows软件跟踪预处理器](#2.5.1)  
+[2.5.1. Windows软件跟踪预处理器-WPP](#2.5.1)  
 [2.5.2. 为驱动添加支持WPP](#2.5.2)  
 [2.5.3. 使用TraceView观察WPP日志打印](#2.5.3)  
 
@@ -457,7 +457,7 @@ Step4里会介绍I/O请求的其他两种类型：Read请求和Write请求。OSR
 [返回总目录](#contents) 
 
 <a name="2.5.1" id="2.5.1"></a>
-#### 2.5.1. Windows软件跟踪预处理器
+#### 2.5.1. Windows软件跟踪预处理器-WPP
 [返回总目录](#contents) 
 
 Windows软件跟踪预处理器([Windows software trace PreProcessor])，简称WPP，是微软提供的集成在Windows驱动开发包SDK里的一套预编译工具软件。它基于Windows事件跟踪(Event Tracing for Windows, 简称ETW)机制，提供了一套更灵活，功能更强大的系统记录日志的方法。它有以下几个突出的优点。  
@@ -554,6 +554,11 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 http://www.microsoft.com/china/whdc/driver/tips/SafeString.mspx
 
 Stampinf: http://msdn.microsoft.com/en-us/library/windows/hardware/ff552786(v=vs.85).aspx
+
+
+Continues Reader for the interrupt ep
+
+D0 D1 and etc
 
 <a name="references" id="references"></a>
 # 参考文献：  
