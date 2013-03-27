@@ -155,12 +155,17 @@ Windows的I/O处理在内核中都是异步的，所以在没有WDF之前驱动�
 
 ##### 1.2.2.2. I/O队列（Queue）
 
-WDF为驱动开发预定义了[Framework Queue Objects] - I/O队列对象，用来表示缓存I/O请求对象的队列。为了简化驱动程序员编写WDM驱动的工作量和处理并行I/O事件，串行I/O事件的复杂性，WDF抽象出了I/O队列的概念来接收驱动需要处理的I/O请求。对每个设备可以创建一个或多个队列。FrameWork为I/O队列类定义了一个回调函数的集合，WDF称之为[Request Handlers]。我们可以选取我们部分回调函数并加入我们自己的处理代码（类似C++中虚函数重载的概念）来处理我们感兴趣的事件，FrameWork也为队列类定义了一组操作成员函数供驱动操作队列。
+为了简化驱动程序员编写WDM驱动的工作量和处理并行I/O事件，串行I/O事件的复杂性，WDF抽象出了I/O队列的概念来缓存驱动需要处理的I/O请求，这就是I/O队列对象[Framework Queue Objects]。
 
-所有的I/O请求在被分发给驱动之前都需要进入队列。队列对象是依附于设备对象而存在的。FrameWork负责管理队列，而驱动代码负责创建队列并设置队列的属性告诉FrameWork该如何管理队列对象。
-WDF驱动创建队列时需要对队列进行仔细的设置，这样FrameWork才会更好地满足我们驱动的需要来为我们服务。对于驱动创建的每一个队列对象，我们要配置好：  
+有几个概念需要强调一下：
 
- * 该队列可以处理的I/O请求的类型。  
+1. 队列对象依附于设备对象而存在。队列对象由驱动负责创建。有关更多的创建队列的内容，可以参考[Creating I/O Queues]。
+2. 驱动对每个设备可以创建一个或多个队列。作为I/O请求的容器，每个队列可以接受一种或者多种I/O请求。如果我们创建的是一个缺省队列则FrameWork会将所有的I/O请求都放到这个缺省队列里，除非驱动又创建了其他的队列用来接收特定的I/O请求。
+3. 并不是所有的I/O请求都是通过队列分发给驱动的。对于有些I/O请求FrameWork会通过回调函数直接发送给驱动。可以参考DDMWDF第8章的“I/O Queues”一节的表8-4:"I/O Request Delivery Mechanism"。
+4. 驱动负责创建I/O队列，但队列的实际管理者还是FrameWork。FrameWork会根据实际的情况和状态等选择将I/O分发给驱动。所以驱动代码在创建队列过程中要仔细地设置队列的属性来告诉FrameWork该如何管理队列对象。这样FrameWork才会更好地满足我们驱动的需要来为我们服务。对于驱动创建的每一个队列对象，我们要配置好以下几个重要的属性：  
+
+ * 该队列可以处理的I/O请求的类型。驱动可以通过调用[WdfDeviceConfigureRequestDispatching]来设置这个参数。
+ * 驱动自己感兴趣并需要处理的回调函数，WDF称之为[Request Handlers]。主要包括驱动要处理I/O请求，比如要处理I/O Control就注册EvtIoDeviceControl，要处理Read请求，就注册EvtIoRead...当有合适的I/O请求到达时，FrameWork就通过对应的回调函数将I/O请求传递给驱动。除了处理I/O请求的回调函数，驱动还可以注册Power事件，队列状态变化事件以及I/O请求取消事件的回调函数处理加入自己的逻辑。
  * FrameWork应该怎样将队列上的I/O请求分发给WDF驱动。Parallel，Sequential还是Manual。  
  * 当PnP和Power事件发生时FrameWork应该如何处理队列，包括启动，停止还是恢复队列。  如果我们希望FrameWork帮助我们管理影响队列的电源状态变化事件，那么我们就配置这个队列是使能电源管理的。只要这样FrameWork就会为我们检测电源状态变化，并在设备进入工作状态时才会为其分发消息，此时队列自动开始工作；当设备退出工作状态时，FrameWork就让队列停止工作，不会为该队列分发消息了。这么做的好处就是驱动如果知道这个队列是使能了电源管理的，则收到I/O请求时就不用再去确认设备的状态了。当然我们也可以不让FrameWork为我们的队列管理电源状态变化。更详细的描述可以参考DDMWDF第7章"Plug and Play and Power Management Support in WDF"。
 
@@ -336,17 +341,16 @@ Step3里要实现的控制是驱动OSRFX2目标板上的一组LED灯，这是一
 `#define USBFX2LK_SET_BARGRAPH_DISPLAY 0xD8`  
 `#define IOCTL_OSRUSBFX2_SET_BAR_GRAPH_DISPLAY CTL_CODE(FILE_DEVICE_OSRUSBFX2, IOCTL_INDEX + 5, METHOD_BUFFERED, FILE_WRITE_ACCESS)`  
 
-
-和大多数驱动一样，OSRFX2的驱动在EvtDriverDeviceAdd回调函数中创建自己的I/O队列.  
-首先定义一个类型为`WDF_IO_QUEUE_CONFIG`的对象来设置队列的属性特征。  
-`WDF_IO_QUEUE_CONFIG                 ioQueueConfig;`  
-我们可以根据自己的需要对不同的IO请求创建不同功能的队列来进行处理。在Step3这个例子里为简单起见我们只创建了一个缺省的队列。所谓缺省队列就是说，一旦你为你的设备创建了一个缺省的I/O队列，FrameWork会把所有的I/O请求都放到这个缺省队列里来进行处理，除非你为这个I/O请求创建了其他的处理队列。
-
 <a name="2.3.2" id="2.3.2"></a>
 #### 2.3.2. 添加队列
 [返回总目录](#contents) 
 
-为了接收用户程序发来的I/O请求，所有的WDF驱动都需要创建自己的队列来缓存I/O请求。初始化缺省队列我们可以调用WDF的宏`WDF_IO_QUEUE_CONFIG_INIT_DEFAULT_QUEUE `。第二个参数传入WdfIoQueueDispatchParallel表明这个队列不会因为我们的I/O处理函数而阻塞。有关I/O分发的机制可以参考[Dispatching Methods for I/O Requests]。  
+和大多数驱动一样，OSRFX2的驱动在EvtDriverDeviceAdd回调函数中创建自己的I/O队列.  
+首先定义一个类型为`WDF_IO_QUEUE_CONFIG`的对象来设置队列的属性特征。  
+`WDF_IO_QUEUE_CONFIG                 ioQueueConfig;`  
+我们可以根据自己的需要对不同的IO请求创建不同功能的队列来进行处理。在Step3这个例子里(包括直到Step5)，为简单起见我们只创建了一个缺省的队列。因为没有其他的队列，FrameWork会把所有的I/O请求都放到这个缺省队列里来进行处理，在这里包括Step3里的I/O请求以及Step4里的Read请求和Write请求。
+
+初始化缺省队列我们可以调用WDF的宏`WDF_IO_QUEUE_CONFIG_INIT_DEFAULT_QUEUE `。第二个参数传入WdfIoQueueDispatchParallel表明这个队列不会因为我们的I/O处理函数而阻塞。有关I/O分发的机制可以参考[Dispatching Methods for I/O Requests]。  
 `WDF_IO_QUEUE_CONFIG_INIT_DEFAULT_QUEUE(&ioQueueConfig, WdfIoQueueDispatchParallel);`  
 向队列注册IO Control的回调函数入口[EvtIoDeviceControl]:
 `ioQueueConfig.EvtIoDeviceControl = EvtIoDeviceControl;`  
@@ -548,17 +552,48 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 <a name="2.6.1" id="2.6.1"></a>
 #### 2.6.1. 
 [返回总目录](#contents) 
+7 ----------------------------------
+Write and Read queue - sequencial
 
+5----------------------------------------
+D0 D1 and etc
+
+4----------------------------------------
+Continues Reader for the interrupt ep
+manual queue
+
+9---------------------------------
+Reset & Reenumerate
+
+================================================
+
+
+1-----------------------------
 
 在您的驱动程序中帮助防止缓冲区溢出，使用安全字符串函数
 http://www.microsoft.com/china/whdc/driver/tips/SafeString.mspx
 
+1.1 __drv_requiresIRQL(PASSIVE_LEVEL)
+
+2----------------------------------------
 Stampinf: http://msdn.microsoft.com/en-us/library/windows/hardware/ff552786(v=vs.85).aspx
 
+3----------------------------------------
+Event trace
 
-Continues Reader for the interrupt ep
 
-D0 D1 and etc
+
+6-----------------------------------------
+Locking Pageable Code or Data: http://msdn.microsoft.com/en-us/library/windows/hardware/ff554307(v=vs.85).aspx
+PAGED_CODE();
+
+
+8 ------------------------------
+WdfUsbTargetDeviceRetrieveInformation 获取设备属性
+
+
+
+
 
 <a name="references" id="references"></a>
 # 参考文献：  
@@ -588,6 +623,7 @@ DDMWDF: [Developing Drivers with the Microsoft Windows Driver Foundation](http:/
 [Windows software trace PreProcessor]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff556204(v=vs.85).aspx
 [WPP Preprocessor]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff556201(v=vs.85).aspx
 [TraceView]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff553872(v=vs.85).aspx
+[Creating I/O Queues]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff540783(v=vs.85).aspx
 
 [SetupDiGetClassDevs]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551069(v=vs.85).aspx
 [SetupDiEnumDeviceInterfaces]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551015(v=vs.85).aspx
