@@ -10,8 +10,8 @@
 [1.1.3 设备节点和设备树](#1.1.3)  
 
 [**1.2 WDF简介**](#1.2)  
-[1.2.1. WDF提供了一个设计良好的对象模型](#1.2.1)  
-[1.2.2. WDF定义了一个统一的I/O模型](#1.2.2)  
+[1.2.1. 设计良好的对象模型](#1.2.1)  
+[1.2.2. 统一的I/O模型](#1.2.2)  
 [1.2.3. PnP和Power管理模型-状态机](#1.2.3)  
 
 ###[**Chapter 2. OSRFX2 - Step By Step**](#chapter-2)  
@@ -39,6 +39,10 @@
 [2.5.1. Windows软件跟踪预处理器-WPP](#2.5.1)  
 [2.5.2. 为驱动添加支持WPP](#2.5.2)  
 [2.5.3. 使用TraceView观察WPP日志打印](#2.5.3)  
+
+###[**Chapter 3. Final -  OSRUSBFX2的最终版本**](#chapter-3)
+
+[**3.1. 创建一个最简单的KMDF功能驱动**](#3.1)  
 
 <a name="chapter-1" id="chapter-1"></a>
 ## ***Chapter 1. 基础知识***
@@ -108,7 +112,7 @@ WDF为各种各样的设备类型抽象了一个统一的驱动模型，这个�
 ![WDF模型](./images/ObjectModel.PNG)
 
 <a name="1.2.1" id="1.2.1"></a>
-#### 1.2.1. WDF提供了一个设计良好的对象模型
+#### 1.2.1. 设计良好的对象模型
 [返回总目录](#contents) 
 
 WDF将Windows的内核数据结构和与驱动操作相关的数据结构封装为对象，例如设备（device）,驱动（driver）, I/O请求（I/O request）, 队列（queue）等等。这些对象有些是由FrameWork创建并传递给WDF驱动使用，有些对象可以由驱动代码根据自己的需要创建，使用并删除。我们驱动要做的一件很重要的事情就是要学会和这些WDF对象打交道并把他们组织起来为实现我们设备的特定功能服务。
@@ -132,7 +136,7 @@ WDF将Windows的内核数据结构和与驱动操作相关的数据结构封装�
 FrameWork模型中的对象的数据结构都是由WDF定义好的，驱动如果为了自己设备的需要想要扩展这些对象存储的数据，可以为对象增加上下文空间。FrameWork对象数据结构中有一个域存放了指向这个上下文空间的句柄。
 
 <a name="1.2.2" id="1.2.2"></a>
-#### 1.2.2. WDF定义了一个统一的I/O模型
+#### 1.2.2. 统一的I/O模型
 [返回总目录](#contents) 
 
 WDF的I/O模型负责管理I/O请求（I/O Request）。I/O请求缓存在I/O队列（I/O Queue）里，如果本驱动无法处理完该I/O请求则它还要继续发送给下一个处理者-I/O目标(I/O Target)-继续处理直到完成。所以WDF的I/O模型颠来倒去就是围绕着I/O请求，I/O队列和I/O目标这三个主要组成部分来介绍。当然幕后还是不要忘记了FrameWork这个大老板。
@@ -153,6 +157,7 @@ WDF将I/O请求封装起来，定义了[Framework Request Objects] - I/O请求�
 I/O Request Cancellation
 Windows的I/O处理在内核中都是异步的，所以在没有WDF之前驱动代码要处理好取消事件不是件容易的事情，驱动需要自己定义和管理至少一个或者多个锁来处理潜在的竞争条件。在WDF中FrameWork代替驱动做了这些工作，为驱动创建的队列提供了内建的缺省锁机制来处理I/O请求的取消事件，FrameWork不仅可以代替驱动取消那些已进入队列排队但还没有分发给驱动的事件，对于那些已经分发的请求，只要驱动设置允许，FrameWork也可以将其取消。
 
+<a name="1.2.2.2" id="1.2.2.2"></a>
 ##### 1.2.2.2. I/O队列（Queue）
 
 为了简化驱动程序员编写WDM驱动的工作量和处理并行I/O事件，串行I/O事件的复杂性，WDF抽象出了I/O队列的概念来缓存驱动需要处理的I/O请求，这就是I/O队列对象[Framework Queue Objects]。
@@ -191,10 +196,10 @@ I/O目标对象从字面上理解就是可以接收I/O请求的对象，具体�
 WDF驱动不需要自己实现一个复杂的状态机来跟踪PnP和电源状态来确定当状态发生变化时该采用什么动作。FrameWork自己内部有一个状态机为我们做了这一切并定义了需要实现的回调函数入口。驱动只要对自己关心的事件注册这些回调函数并在实现中加入对自己设备特定的处理，对其他的事件完全可以交给FrameWork去处理就好了。
 
 <a name="chapter-2" id="chapter-2"></a>
-## ***Chapter 2. OSRFX2 - Step By Step***
+## ***Chapter 2. OSRUSBFX2 - Step By Step***
 [返回总目录](#contents) 
 
-WDK中的OSRFX2例子在WDF出现之后已经基于WDF完全重写了。我们这里正是基于这个例子来循序渐进地了解一下如何开发一个基于WDF的KMDF驱动，以及在这个过程中我们需要注意哪些重要的知识点。
+WDK中的OSRUSBFX2例子在WDF出现之后已经基于WDF完全重写了。我们这里正是基于这个例子来循序渐进地了解一下如何开发一个基于WDF的KMDF驱动，以及在这个过程中我们需要注意哪些重要的知识点。
 
 <a name="2.1" id="2.1"></a>
 ### 2.1. Step1 - 创建一个最简单的KMDF功能驱动
@@ -545,15 +550,33 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 建议仔细阅读DDMWDF第11章的“How to Run a Software Trace Session
 ”一节。写得很详细，我这里就不赘述了。如果大家实在需要我翻译成中文，请告之:)
 
-<a name="2.6" id="2.6"></a>
-### 2.6. Final -  最终版本
+<a name="chapter-3" id="chapter-3"></a>
+## ***Chapter 3. Final -  OSRUSBFX2的最终版本***
 [返回总目录](#contents) 
+
+<a name="3.1" id="3.1"></a>
+### 3.1. 完善我们的读写队列
+[返回总目录](#contents) 
+
+在Step by Step里我们因为从简单实现考虑，采用的是定义了一个缺省的I/O队列来缓存所有驱动需要处理的I/O请求，包括I/O Control请求，读请求和写请求。
+
 
 <a name="2.6.1" id="2.6.1"></a>
 #### 2.6.1. 
 [返回总目录](#contents) 
 7 ----------------------------------
 Write and Read queue - sequencial
+
+[Synchronous and Asynchronous I/O]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365683(v=vs.85).aspx
+[I/O Completion Ports]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365198(v=vs.85).aspx
+
+[CreateFile]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa363858(v=vs.85).aspx
+[ReadFile]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365467(v=vs.85).aspx
+
+[CreateIoCompletionPort]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa363862(v=vs.85).aspx
+[GetQueuedCompletionStatus]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa364986(v=vs.85).aspx
+
+
 
 5----------------------------------------
 D0 D1 and etc
