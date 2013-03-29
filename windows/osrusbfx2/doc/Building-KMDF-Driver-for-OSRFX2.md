@@ -14,7 +14,7 @@
 [1.2.2. 统一的I/O模型](#1.2.2)  
 [1.2.3. PnP和Power管理模型-状态机](#1.2.3)  
 
-###[**Chapter 2. OSRFX2 - Step By Step**](#chapter-2)  
+###[**Chapter 2. OSRUSBFX2 - Step By Step**](#chapter-2)  
 
 [**2.1. Step1 - 创建一个最简单的KMDF功能驱动**](#2.1)  
 [2.1.1. 驱动入口点DriverEntry](#2.1.1)  
@@ -558,7 +558,23 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 ### 3.1. 完善我们的读写队列
 [返回总目录](#contents) 
 
-在Step by Step里我们因为从简单实现考虑，采用的是定义了一个缺省的I/O队列来缓存所有驱动需要处理的I/O请求，包括I/O Control请求，读请求和写请求。
+在Step by Step里我们因为从简单实现考虑，采用的是定义了一个缺省的I/O队列来缓存所有驱动需要处理的I/O请求，包括I/O Control请求，读请求和写请求，并将这些请求全部采用并发（WdfIoQueueDispatchParallel）的方式进行分发。
+
+研读osrusbfx2的测试代码“\osrusbfx2\kmdf\exe\testapp.c”，我们可以看到应用程序演示了两种批量读写的操作方式，一种是同步的方式，还有一种是异步的方式。所谓同步方式就是以同步的方式打开设备文件，然后调用系统读写API时系统就会在API一级保证只有在API执行完毕，比如对写-WriteFile，只有数据写完毕控制才会返回给调用线程，调用线程才可以调用下一个API。异步方式则是以异步参数打开设备文件，然后调用系统读写API的时候系统不会阻塞，而是立即返回，程序可以再创建一个工作线程等待系统异步通知操作完成。
+
+考虑到OSRFX2设备的读写端点的处理能力，EP6和EP8都是双缓存。参考下图
+也就是说如果我们发送4个MaxPacket大小的数据到EP6(每个Packet大小的最大值随设备传输的速率不同而不同，在全速1.1下是64个字节，高速2.0下是512个字节)而没有对EP8进行读操作，则前两个Packet的数据则缓存在EP8的缓存中，后两个Packet缓存在EP6的缓存中。此时如果应用程序继续通过驱动向EP6发送第5个Packet，那么这个Packet会被阻塞在USB的总线驱动里，直到EP6的缓存空闲。
+
+
+现在我们从整体上，从上（应用程序）到下（OSRUSBFX2的设备栈）来比较这两种方式。
+以Step by Step为例，如果应用层采用的是同步方式，则驱动的处理应该差不多也是足够了。因为读操作一定会等待写操作完成并返回后执行，所以从应用层就保证了操作是串行的。那么
+
+
+Chapter10
+WDF Synchronization Features
+Flow Control for I/O Queues
+有关异步读写、通信
+http://hi.baidu.com/linglux/item/39617e3fb672434b033edc3b
 
 
 <a name="2.6.1" id="2.6.1"></a>
