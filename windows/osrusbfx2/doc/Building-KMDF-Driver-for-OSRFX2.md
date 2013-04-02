@@ -7,7 +7,7 @@
 [**1.1 Windows驱动的一些基本知识**](#1.1)  
 [1.1.1 Windows系统架构](#1.1.1)  
 [1.1.2 设备对象和设备栈](#1.1.2)  
-[1.1.3 设备节点和设备树](#1.1.3)  
+[1.1.3 设备节点和设备树](#1.1.3)  =
 
 [**1.2 WDF简介**](#1.2)  
 [1.2.1. 设计良好的对象模型](#1.2.1)  
@@ -573,14 +573,13 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 
 其他和读写操作相关的内容都在bulkrwr.c文件里，这里的操作和Step by Step里的差别不大，就不赘述了。
 
-驱动对读写的实现并不是很复杂。但从中我们可以学到的是如何配置队列来用最小的代价实现对I/O请求的处理。
-WDF drivers can configure each of their I/O queues for parallel, sequential, or manual dispatching. By analyzing the capabilities of your device and configuring the queues appropriately, you can reduce your driver's need for additional synchronization. The dispatch method for an I/O queue affects the degree of concurrency in a driver's I/O processing, because it controls the number of I/O requests from the queue that are concurrently active in the driver.
-
-Consider the following examples:
+驱动对读写的实现并不是很复杂。但从中我们可以学到的是如何配置队列的分发方式，并发，串行还是手动方式，从而利用FrameWork来帮助我们控制驱动中同时可以激活的I/O请求的个数.FrameWork提供的这些能力可以帮助我们用最小的代价降低驱动在I/O请求处理中可能会面临的并发问题上的复杂度。在合理配置对类的分发方式时哦我们要仔细分析设备的处理能力并根据设备的能力作出最优的选择,考虑以下几种情况：
 
 If the device can handle only one I/O request at a time, you should configure a single, sequential I/O queue.
+如果设备同时只能处理一个I/O请求，则我们可以为之配置一个支持串行分发的队列。
 
 If the device can handle one read request and one write request simultaneously but has no limit on the number of device I/O requests, you might configure a sequential queue for read requests, another sequential queue for write requests, and a parallel queue for device I/O control requests.
+如果设备可以同时处理一个读请求和一个写请求，而对Device I/O 控制请求则没有时序上的限制，则我们可以为读请求创建一个串行队列，为写请求创建另一个串行队列，对于Device I/O 控制请求则另外单独创建一个支持并发分发的队列。我们的OSRFX2就是类似这种情况。
 
 Perhaps the device can handle some device I/O control requests concurrently but can deal with other such requests only one at a time. In this case, you can set up a single parallel queue for incoming device I/O control requests, inspect the requests as the queue dispatches them, and then redirect the requests that require sequential handling to a sequential queue for further processing.
 
