@@ -560,10 +560,46 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 
 在Step by Step里我们因为从简单实现考虑，采用的是定义了一个缺省的I/O队列来缓存所有驱动需要处理的I/O请求，包括I/O Control请求，读请求和写请求，并将这些请求全部采用并发（WdfIoQueueDispatchParallel）的方式进行分发。
 
+但考虑到OSRFX2设备实际的读写端点的处理能力，从保护设备的角度出发，驱动最好采用串行的方法对EP6和EP8进行写和读，否则可能会导致多个读写请求同时作用到同一个端点上，其行为是不可预期的。
+
+所以在Final版本的代码里，我们将读写操作从缺省队列里剥离出来，分别创建了一个队列来专门处理I/O读请求和另一个队列专门处理I/O写请求。并配置这两个队列以顺序方式分发I/O请求。
+参考Device.c的OsrFxEvtDeviceAdd函数，以创建读队列为例：  
+首先调用`WDF_IO_QUEUE_CONFIG_INIT(&ioQueueConfig, WdfIoQueueDispatchSequential);`该代码是初始化队列并配置为以顺序方式分发I/O请求。
+接着注册回调函数， 这里除了注册OsrFxEvtIoRead，我们还注册了另外一个回调函数OsrFxEvtIoStop，该函数会在设备进入休眠或者设备被移除时被调用，驱动需要在该回调函数中取消还未执行完毕的I/O请求。
+`ioQueueConfig.EvtIoRead = OsrFxEvtIoRead;`  
+`ioQueueConfig.EvtIoStop = OsrFxEvtIoStop;`  
+然后调用WdfIoQueueCreate创建队列，没有什么特别之处。创建完成后还要调用WdfDeviceConfigureRequestDispatching，这一步的目的是设置本队列只处理I/O读请求。
+`status = WdfDeviceConfigureRequestDispatching(device,queue,WdfRequestTypeRead);`
+
+其他和读写操作相关的内容都在bulkrwr.c文件里，这里的操作和Step by Step里的差别不大，就不赘述了。
+
+驱动对读写的实现并不是很复杂。但从中我们可以学到的是如何配置队列来用最小的代价实现对I/O请求的处理。
+WDF drivers can configure each of their I/O queues for parallel, sequential, or manual dispatching. By analyzing the capabilities of your device and configuring the queues appropriately, you can reduce your driver's need for additional synchronization. The dispatch method for an I/O queue affects the degree of concurrency in a driver's I/O processing, because it controls the number of I/O requests from the queue that are concurrently active in the driver.
+
+Consider the following examples:
+
+If the device can handle only one I/O request at a time, you should configure a single, sequential I/O queue.
+
+If the device can handle one read request and one write request simultaneously but has no limit on the number of device I/O requests, you might configure a sequential queue for read requests, another sequential queue for write requests, and a parallel queue for device I/O control requests.
+
+Perhaps the device can handle some device I/O control requests concurrently but can deal with other such requests only one at a time. In this case, you can set up a single parallel queue for incoming device I/O control requests, inspect the requests as the queue dispatches them, and then redirect the requests that require sequential handling to a sequential queue for further processing.
+
+For many drivers, controlling the flow of I/O requests is the easiest and most important means of managing concurrent operations. However, limiting the number of concurrently active I/O requests does not resolve all potential synchronization issues in I/O processing. For example, most drivers require additional synchronization to resolve race conditions during I/O cancellation.
+
+
+
+
+
+
+
+
+
+EP6和EP8都是双缓存。参考下图
+也就是说如果我们发送4个MaxPacket大小的数据到EP6(每个Packet大小的最大值随设备传输的速率不同而不同，在全速1.1下是64个字节，高速2.0下是512个字节)而没有对EP8进行读操作，则前两个Packet的数据则缓存在EP8的缓存中，后两个Packet缓存在EP6的缓存中。此时如果应用程序继续通过驱动向EP6发送第5个Packet，那么这个Packet会被阻塞在USB的总线驱动里，直到EP6的缓存空闲。
+
+
 研读osrusbfx2的测试代码“\osrusbfx2\kmdf\exe\testapp.c”，我们可以看到应用程序演示了两种批量读写的操作方式，一种是同步的方式，还有一种是异步的方式。所谓同步方式就是以同步的方式打开设备文件，然后调用系统读写API时系统就会在API一级保证只有在API执行完毕，比如对写-WriteFile，只有数据写完毕控制才会返回给调用线程，调用线程才可以调用下一个API。异步方式则是以异步参数打开设备文件，然后调用系统读写API的时候系统不会阻塞，而是立即返回，程序可以再创建一个工作线程等待系统异步通知操作完成。
 
-考虑到OSRFX2设备的读写端点的处理能力，EP6和EP8都是双缓存。参考下图
-也就是说如果我们发送4个MaxPacket大小的数据到EP6(每个Packet大小的最大值随设备传输的速率不同而不同，在全速1.1下是64个字节，高速2.0下是512个字节)而没有对EP8进行读操作，则前两个Packet的数据则缓存在EP8的缓存中，后两个Packet缓存在EP6的缓存中。此时如果应用程序继续通过驱动向EP6发送第5个Packet，那么这个Packet会被阻塞在USB的总线驱动里，直到EP6的缓存空闲。
 
 
 现在我们从整体上，从上（应用程序）到下（OSRUSBFX2的设备栈）来比较这两种方式。
@@ -576,6 +612,8 @@ Flow Control for I/O Queues
 有关异步读写、通信
 http://hi.baidu.com/linglux/item/39617e3fb672434b033edc3b
 
+
+I/O Completion Port(I/O完成对象)的原理与实现: http://blog.csdn.net/fengxinze/article/details/7027352
 
 <a name="2.6.1" id="2.6.1"></a>
 #### 2.6.1. 

@@ -244,7 +244,7 @@ void TD_Poll(void)              // Called repeatedly while the device is idle
         }
         EP8BCH = EP6BCH;  
         SYNCDELAY;  
-        EP8BCL = EP6BCL;        // arm EP6IN
+        EP8BCL = EP6BCL;        // arm EP8IN
         SYNCDELAY;                    
         EP6BCL = 0x80;          // re(arm) EP6OUT
      }
