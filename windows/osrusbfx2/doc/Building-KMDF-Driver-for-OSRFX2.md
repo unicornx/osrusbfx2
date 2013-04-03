@@ -560,7 +560,7 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 ### 3.1. 优化读和写
 [返回总目录](#contents) 
 
-在Step by Step里我们因为从简单实现考虑，采用的是定义了一个缺省的I/O队列来缓存所有驱动需要处理的I/O请求，包括I/O Control请求，读请求和写请求，并将这些请求全部采用并发（WdfIoQueueDispatchParallel）的方式进行分发。
+在第二章里我们因为从简单实现考虑，采用的是定义了一个缺省的I/O队列来缓存所有驱动需要处理的I/O请求，包括I/O Control请求，读请求和写请求，并将这些请求全部采用并发（WdfIoQueueDispatchParallel）的方式进行分发。
 
 但考虑到OSRFX2设备实际的读写端点的处理能力，从保护设备的角度出发，驱动最好采用串行的方法对EP6和EP8进行写和读，否则可能会导致多个读写请求同时作用到同一个端点上，其行为是不可预期的。
 
@@ -577,7 +577,7 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 然后调用WdfIoQueueCreate创建队列，没有什么特别之处。创建完成后还要调用WdfDeviceConfigureRequestDispatching，这一步的目的是设置本队列只处理I/O读请求。
 `status = WdfDeviceConfigureRequestDispatching(device,queue,WdfRequestTypeRead);`
 
-其他和读写操作相关的内容都在bulkrwr.c文件里，这里的操作和Step by Step里的差别不大，就不赘述了。
+其他和读写操作相关的内容都在bulkrwr.c文件里，这里的操作和第二章里的差别不大，就不赘述了。
 
 驱动对读写的实现并不是很复杂。但从中我们可以学到的是如何配置队列的分发方式，并发，串行还是手动方式，从而利用FrameWork来帮助我们控制驱动中同时处理的I/O请求的个数。FrameWork提供的控制分发的能力可以帮助我们用最小的代价降低驱动在I/O请求处理中可能会面临的并发问题上的复杂度。我们还要了解的是在合理配置队列的分发方式时，我们必须要仔细分析设备端的处理能力并根据设备的能力作出最优的选择,考虑以下几种情况：
 
@@ -601,6 +601,17 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 ![OSRFX2 EP6&EP8](./images/osrfx2-bulkep.PNG)  
 
 看了一下osrusbfx2.exe的异步读写的函数AsyncIo，其目的是要采用异步的方式进行100对读写(`NUM_ASYNCH_IO`)。有意思的是这里采用的异步模型并不是典型的WaitForSingleObject，而是采用了[I/O Completion Ports]。据说这是一种Windows特有的适合更高效的I/O读写模型。其本质是在Windows内核的帮助下提供了称之为[I/O Completion Ports]的控制点，这是一种内核对象。围绕这个内核对象，每一个I/O Completion Port都会维护一个针对设备的I/O请求队列（注意这个队列和WDF的FrameWork和我们驱动内创建的队列是两码事），应用程序要做的事情包括两方面：第一，保证对I/O的系统调用采用异步方式，否则就称不上是异步的模型了；第二，围绕I/O Completion Port，注册适当个数的工作线程，注意在[I/O Completion Ports]架构下，工作线程的数目用不着太多，如果还是抱着老思想为每一个读写都创建一个工作线程，那是走了回头路。[I/O Completion Ports]的一个很重要的思想就是用尽可能少的线程来做最有效率的事情，避免整个系统在大量的线程面前浪费有限的资源，包括切换线程上下文的CPU时间和为每个线程控制体保留的内存。在osrusbfx2.exe里我们可以看到它只启动了两个线程，一个读线程和一个写线程，每个线程关联了一个自己的I/O Completion Port。每个线程先一次性将100个读请求或者100个写请求全部提交给系统，然后就等待自己的I/O Completion Port在I/O请求完成时通知它，再进行下一轮处理。注意到驱动内部实际上会将所有的读和写请求进入串行队列逐个处理，但因为设备可以支持读写同时发生，所以理论上读写在自己的线程里会并行动作，这样效率比同步会有很大的提高。更多的有关I/O Completion Port的介绍可以参考[I/O Completion Port(I/O完成对象)的原理与实现]。
+
+
+<a name="3.2" id="3.2"></a>
+### 3.2. 即插即用和电源管理
+[返回总目录](#contents) 
+
+
+<a name="3.2.1" id="3.2.1"></a>
+#### 3.2.1. 
+[返回总目录](#contents)  
+
 
 
 5----------------------------------------
@@ -650,7 +661,7 @@ DDMWDF: [Developing Drivers with the Microsoft Windows Driver Foundation](http:/
 
 
 
-
+[DDMWDF翻译]: http://my.csdn.net/cyx1231st
 [Synchronous and Asynchronous I/O]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365683(v=vs.85).aspx
 [I/O Completion Ports]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365198(v=vs.85).aspx
 
