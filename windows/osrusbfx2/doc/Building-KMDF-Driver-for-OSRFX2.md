@@ -42,7 +42,9 @@
 
 ###[**Chapter 3. Final -  OSRUSBFX2的最终版本**](#chapter-3)
 
-[**3.1. 创建一个最简单的KMDF功能驱动**](#3.1)  
+[**3.1. 优化读和写**](#3.1)  
+[3.1.1. 完善驱动的读写队列](#3.1.1)  
+[3.1.2. 测试程序的同步和异步读写](#3.1.2)    
 
 <a name="chapter-1" id="chapter-1"></a>
 ## ***Chapter 1. 基础知识***
@@ -555,14 +557,18 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 [返回总目录](#contents) 
 
 <a name="3.1" id="3.1"></a>
-### 3.1. 完善我们的读写队列
+### 3.1. 优化读和写
 [返回总目录](#contents) 
 
 在Step by Step里我们因为从简单实现考虑，采用的是定义了一个缺省的I/O队列来缓存所有驱动需要处理的I/O请求，包括I/O Control请求，读请求和写请求，并将这些请求全部采用并发（WdfIoQueueDispatchParallel）的方式进行分发。
 
 但考虑到OSRFX2设备实际的读写端点的处理能力，从保护设备的角度出发，驱动最好采用串行的方法对EP6和EP8进行写和读，否则可能会导致多个读写请求同时作用到同一个端点上，其行为是不可预期的。
 
-所以在Final版本的代码里，我们将读写操作从缺省队列里剥离出来，分别创建了一个队列来专门处理I/O读请求和另一个队列专门处理I/O写请求。并配置这两个队列以顺序方式分发I/O请求。
+<a name="3.1.1" id="3.1.1"></a>
+#### 3.1.1. 完善驱动的读写队列
+[返回总目录](#contents)  
+
+在Final版本的代码里，我们将读写操作从缺省队列里剥离出来，分别创建了一个队列来专门处理I/O读请求和另一个队列专门处理I/O写请求。并配置这两个队列以顺序方式分发I/O请求。
 参考Device.c的OsrFxEvtDeviceAdd函数，以创建读队列为例：  
 首先调用`WDF_IO_QUEUE_CONFIG_INIT(&ioQueueConfig, WdfIoQueueDispatchSequential);`该代码是初始化队列并配置为以顺序方式分发I/O请求。
 接着注册回调函数， 这里除了注册OsrFxEvtIoRead，我们还注册了另外一个回调函数OsrFxEvtIoStop，该函数会在设备进入休眠或者设备被移除时被调用，驱动需要在该回调函数中取消还未执行完毕的I/O请求。
@@ -573,52 +579,39 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 
 其他和读写操作相关的内容都在bulkrwr.c文件里，这里的操作和Step by Step里的差别不大，就不赘述了。
 
-驱动对读写的实现并不是很复杂。但从中我们可以学到的是如何配置队列的分发方式，并发，串行还是手动方式，从而利用FrameWork来帮助我们控制驱动中同时可以激活的I/O请求的个数.FrameWork提供的这些能力可以帮助我们用最小的代价降低驱动在I/O请求处理中可能会面临的并发问题上的复杂度。在合理配置对类的分发方式时哦我们要仔细分析设备的处理能力并根据设备的能力作出最优的选择,考虑以下几种情况：
+驱动对读写的实现并不是很复杂。但从中我们可以学到的是如何配置队列的分发方式，并发，串行还是手动方式，从而利用FrameWork来帮助我们控制驱动中同时处理的I/O请求的个数。FrameWork提供的控制分发的能力可以帮助我们用最小的代价降低驱动在I/O请求处理中可能会面临的并发问题上的复杂度。我们还要了解的是在合理配置队列的分发方式时，我们必须要仔细分析设备端的处理能力并根据设备的能力作出最优的选择,考虑以下几种情况：
 
-If the device can handle only one I/O request at a time, you should configure a single, sequential I/O queue.
-如果设备同时只能处理一个I/O请求，则我们可以为之配置一个支持串行分发的队列。
+- 1. 如果设备同时只能处理一个I/O请求，则我们可以为之配置一个支持串行分发的队列。
+- 2. 如果设备可以同时处理一个读请求和一个写请求，而对Device I/O 控制请求则没有时序上的限制（之所以这么说主要是相对于较慢速的大批量数据读写请求，基于I/O控制请求大部分情况下都是执行一些快速的设置控制和读取操作并可以支持同时执行，比如在OSRFX2上点LED灯和读取LED灯的状态等等，这些操作执行的速度很快，几乎没有延时），则我们可以为读请求创建一个串行队列，为写请求创建另一个串行队列，对于Device I/O 控制请求则另外单独创建一个支持并发分发的队列。我们的OSRFX2就是类似这种情况。
+- 3. 如果我们发现有些设备I/O控制请求的确需要串行执行，那么在第二点的基础上我们再创建一个支持串行分发的队列，在处理并行队列的I/O请求时对I/O请求进行过滤，如果某个请求要串行执行，则转发到另一个串行队列上去。
 
-If the device can handle one read request and one write request simultaneously but has no limit on the number of device I/O requests, you might configure a sequential queue for read requests, another sequential queue for write requests, and a parallel queue for device I/O control requests.
-如果设备可以同时处理一个读请求和一个写请求，而对Device I/O 控制请求则没有时序上的限制，则我们可以为读请求创建一个串行队列，为写请求创建另一个串行队列，对于Device I/O 控制请求则另外单独创建一个支持并发分发的队列。我们的OSRFX2就是类似这种情况。
+介绍完了驱动的队列处理，似乎可以结束这一小节了，但我仍然感觉意犹未尽的是，在osrusbfx2的用户态下的测试程序osrusbfx2.exe里有关读写的内容还是很值得我们研究一下的。我们理解了驱动的逻辑再看看应用程序的逻辑，可以更加深刻地理解Windows是如何煞费苦心地把应用程序和驱动联系起来的。
 
-Perhaps the device can handle some device I/O control requests concurrently but can deal with other such requests only one at a time. In this case, you can set up a single parallel queue for incoming device I/O control requests, inspect the requests as the queue dispatches them, and then redirect the requests that require sequential handling to a sequential queue for further processing.
+<a name="3.1.2" id="3.1.2"></a>
+#### 3.1.2. 测试程序的同步和异步读写
+[返回总目录](#contents)  
 
-For many drivers, controlling the flow of I/O requests is the easiest and most important means of managing concurrent operations. However, limiting the number of concurrently active I/O requests does not resolve all potential synchronization issues in I/O processing. For example, most drivers require additional synchronization to resolve race conditions during I/O cancellation.
+研读osrusbfx2的测试代码“\osrusbfx2\kmdf\exe\testapp.c”，我们可以看到测试程序采用了了两种批量读写的操作方式，一种是同步的方式，还有一种是异步的方式。这也是Windows的I/O模型中最最基本的两种I/O模式[Synchronous and Asynchronous I/O]。
 
+所谓同步方式就是以同步的方式打开（[CreateFile]）设备文件（即打开文件时不带FILE_FLAG_OVERLAPPED标志），然后调用系统读写API时系统就会在API一级进行阻塞保证只有在API执行完毕，比如对写-WriteFile，只有数据写完毕控制才会返回给调用线程的用户态控制，测试程序才可以调用下一个API。
 
+异步方式则是以异步参数FILE_FLAG_OVERLAPPED打开（[CreateFile]）设备文件，然后调用系统读写API的时候传入OVERLAPPED参数，此时系统不会阻塞API，而是立即返回。那么调用者可以在某个时刻通过WaitForSingleObject等函数来等待中的hEvent来等待操作完成 （可能已经完成）进行同步，当操作完成以后，可以调用GetOverlappedResult者获得操作的结果，比如是否成功，读取了多少字节等等。这里 的发起者就是应用程序，而执行者就是操作系统本身，至于执行者是怎么执行的，我们会在后面的篇幅讨论。而两者的同步就是通过一个Windows Event来完成。
 
+同步方式没什么好说的，因为系统内核在API层别就帮助我们实现了阻塞同步，所以整个系统里同时只会有一个I/O请求。驱动里对读写的串行化实际已经没有什么必要了。但这么做是以牺牲效率为代价的。让我们再来仔细看一下OSRFX2设备的EP6（OUT）和EP8（IN）的端点能力，参考下图。EP6和EP8都是双缓存，考虑到芯片固件内部从EP6往EP8搬运数据的速度极快，从整体上可以认为对这两个端点的写和读是全双工的。也就是说如果EP8上有数据，即使主机往EP6上写数据的操作还没有完成（进行中），主机也可以立即从EP8上读数据。那么我们在应用层读数据的时候就没有必要一定要等待写数据完成才开始。只要设备有这个能力，我们就要充分发挥它，否则就是浪费，不是吗？  
+![OSRFX2 EP6&EP8](./images/osrfx2-bulkep.PNG)  
 
+看了一下osrusbfx2.exe的异步读写的函数AsyncIo，其目的是要采用异步的方式进行100对读写(`NUM_ASYNCH_IO`)。有意思的是这里采用的异步模型并不是典型的WaitForSingleObject，而是采用了[I/O Completion Ports]。据说这是一种Windows特有的适合更高效的I/O读写模型。其本质是在Windows内核的帮助下提供了称之为[I/O Completion Ports]的控制点，这是一种内核对象。围绕这个内核对象，每一个I/O Completion Port都会维护一个针对设备的I/O请求队列（注意这个队列和WDF的FrameWork和我们驱动内创建的队列是两码事），应用程序要做的事情包括两方面：第一，保证对I/O的系统调用采用异步方式，否则就称不上是异步的模型了；第二，围绕I/O Completion Port，注册适当个数的工作线程，注意在[I/O Completion Ports]架构下，工作线程的数目用不着太多，如果还是抱着老思想为每一个读写都创建一个工作线程，那是走了回头路。[I/O Completion Ports]的一个很重要的思想就是用尽可能少的线程来做最有效率的事情，避免整个系统在大量的线程面前浪费有限的资源，包括切换线程上下文的CPU时间和为每个线程控制体保留的内存。在osrusbfx2.exe里我们可以看到它只启动了两个线程，一个读线程和一个写线程，每个线程关联了一个自己的I/O Completion Port。每个线程先一次性将100个读请求或者100个写请求全部提交给系统，然后就等待自己的I/O Completion Port在I/O请求完成时通知它，再进行下一轮处理。注意到驱动内部实际上会将所有的读和写请求进入串行队列逐个处理，但因为设备可以支持读写同时发生，所以理论上读写在自己的线程里会并行动作，这样效率比同步会有很大的提高。更多的有关I/O Completion Port的介绍可以参考[I/O Completion Port(I/O完成对象)的原理与实现]。
 
+<a name="references" id="references"></a>
+# 参考文献：  
+[返回总目录](#contents)  
 
-
-
-
-EP6和EP8都是双缓存。参考下图
-也就是说如果我们发送4个MaxPacket大小的数据到EP6(每个Packet大小的最大值随设备传输的速率不同而不同，在全速1.1下是64个字节，高速2.0下是512个字节)而没有对EP8进行读操作，则前两个Packet的数据则缓存在EP8的缓存中，后两个Packet缓存在EP6的缓存中。此时如果应用程序继续通过驱动向EP6发送第5个Packet，那么这个Packet会被阻塞在USB的总线驱动里，直到EP6的缓存空闲。
-
-
-研读osrusbfx2的测试代码“\osrusbfx2\kmdf\exe\testapp.c”，我们可以看到应用程序演示了两种批量读写的操作方式，一种是同步的方式，还有一种是异步的方式。所谓同步方式就是以同步的方式打开设备文件，然后调用系统读写API时系统就会在API一级保证只有在API执行完毕，比如对写-WriteFile，只有数据写完毕控制才会返回给调用线程，调用线程才可以调用下一个API。异步方式则是以异步参数打开设备文件，然后调用系统读写API的时候系统不会阻塞，而是立即返回，程序可以再创建一个工作线程等待系统异步通知操作完成。
-
-
-
-现在我们从整体上，从上（应用程序）到下（OSRUSBFX2的设备栈）来比较这两种方式。
-以Step by Step为例，如果应用层采用的是同步方式，则驱动的处理应该差不多也是足够了。因为读操作一定会等待写操作完成并返回后执行，所以从应用层就保证了操作是串行的。那么
-
-
-Chapter10
-WDF Synchronization Features
-Flow Control for I/O Queues
-有关异步读写、通信
-http://hi.baidu.com/linglux/item/39617e3fb672434b033edc3b
+http://www.ituring.com.cn/article/554  
+http://channel9.msdn.com/Shows/Going+Deep/Doron-Holan-Kernel-Mode-Driver-Framework  
+DDMWDF: [Developing Drivers with the Microsoft Windows Driver Foundation](http://flylib.com/books/en/3.141.1.1/1/)  
 
 
-I/O Completion Port(I/O完成对象)的原理与实现: http://blog.csdn.net/fengxinze/article/details/7027352
 
-<a name="2.6.1" id="2.6.1"></a>
-#### 2.6.1. 
-[返回总目录](#contents) 
-7 ----------------------------------
-Write and Read queue - sequencial
 
 [Synchronous and Asynchronous I/O]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365683(v=vs.85).aspx
 [I/O Completion Ports]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365198(v=vs.85).aspx
@@ -629,55 +622,8 @@ Write and Read queue - sequencial
 [CreateIoCompletionPort]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa363862(v=vs.85).aspx
 [GetQueuedCompletionStatus]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa364986(v=vs.85).aspx
 
-
-
-5----------------------------------------
-D0 D1 and etc
-
-4----------------------------------------
-Continues Reader for the interrupt ep
-manual queue
-
-9---------------------------------
-Reset & Reenumerate
-
-================================================
-
-
-1-----------------------------
-
-在您的驱动程序中帮助防止缓冲区溢出，使用安全字符串函数
-http://www.microsoft.com/china/whdc/driver/tips/SafeString.mspx
-
-1.1 __drv_requiresIRQL(PASSIVE_LEVEL)
-
-2----------------------------------------
-Stampinf: http://msdn.microsoft.com/en-us/library/windows/hardware/ff552786(v=vs.85).aspx
-
-3----------------------------------------
-Event trace
-
-
-
-6-----------------------------------------
-Locking Pageable Code or Data: http://msdn.microsoft.com/en-us/library/windows/hardware/ff554307(v=vs.85).aspx
-PAGED_CODE();
-
-
-8 ------------------------------
-WdfUsbTargetDeviceRetrieveInformation 获取设备属性
-
-
-
-
-
-<a name="references" id="references"></a>
-# 参考文献：  
-[返回总目录](#contents)  
-
-http://www.ituring.com.cn/article/554  
-http://channel9.msdn.com/Shows/Going+Deep/Doron-Holan-Kernel-Mode-Driver-Framework  
-DDMWDF: [Developing Drivers with the Microsoft Windows Driver Foundation](http://flylib.com/books/en/3.141.1.1/1/)  
+[有关异步读写、通信]:http://hi.baidu.com/linglux/item/39617e3fb672434b033edc3b
+[I/O Completion Port(I/O完成对象)的原理与实现]: http://blog.csdn.net/fengxinze/article/details/7027352
 
 
 [Device Tree]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff543194(v=vs.85).aspx
