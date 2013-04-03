@@ -602,6 +602,44 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 
 看了一下osrusbfx2.exe的异步读写的函数AsyncIo，其目的是要采用异步的方式进行100对读写(`NUM_ASYNCH_IO`)。有意思的是这里采用的异步模型并不是典型的WaitForSingleObject，而是采用了[I/O Completion Ports]。据说这是一种Windows特有的适合更高效的I/O读写模型。其本质是在Windows内核的帮助下提供了称之为[I/O Completion Ports]的控制点，这是一种内核对象。围绕这个内核对象，每一个I/O Completion Port都会维护一个针对设备的I/O请求队列（注意这个队列和WDF的FrameWork和我们驱动内创建的队列是两码事），应用程序要做的事情包括两方面：第一，保证对I/O的系统调用采用异步方式，否则就称不上是异步的模型了；第二，围绕I/O Completion Port，注册适当个数的工作线程，注意在[I/O Completion Ports]架构下，工作线程的数目用不着太多，如果还是抱着老思想为每一个读写都创建一个工作线程，那是走了回头路。[I/O Completion Ports]的一个很重要的思想就是用尽可能少的线程来做最有效率的事情，避免整个系统在大量的线程面前浪费有限的资源，包括切换线程上下文的CPU时间和为每个线程控制体保留的内存。在osrusbfx2.exe里我们可以看到它只启动了两个线程，一个读线程和一个写线程，每个线程关联了一个自己的I/O Completion Port。每个线程先一次性将100个读请求或者100个写请求全部提交给系统，然后就等待自己的I/O Completion Port在I/O请求完成时通知它，再进行下一轮处理。注意到驱动内部实际上会将所有的读和写请求进入串行队列逐个处理，但因为设备可以支持读写同时发生，所以理论上读写在自己的线程里会并行动作，这样效率比同步会有很大的提高。更多的有关I/O Completion Port的介绍可以参考[I/O Completion Port(I/O完成对象)的原理与实现]。
 
+
+5----------------------------------------
+D0 D1 and etc
+
+4----------------------------------------
+Continues Reader for the interrupt ep
+manual queue
+
+9---------------------------------
+Reset & Reenumerate
+
+================================================
+
+
+1-----------------------------
+
+在您的驱动程序中帮助防止缓冲区溢出，使用安全字符串函数
+http://www.microsoft.com/china/whdc/driver/tips/SafeString.mspx
+
+1.1 __drv_requiresIRQL(PASSIVE_LEVEL)
+
+2----------------------------------------
+Stampinf: http://msdn.microsoft.com/en-us/library/windows/hardware/ff552786(v=vs.85).aspx
+
+3----------------------------------------
+Event trace
+
+
+
+6-----------------------------------------
+Locking Pageable Code or Data: http://msdn.microsoft.com/en-us/library/windows/hardware/ff554307(v=vs.85).aspx
+PAGED_CODE();
+
+
+8 ------------------------------
+WdfUsbTargetDeviceRetrieveInformation 获取设备属性
+
+
 <a name="references" id="references"></a>
 # 参考文献：  
 [返回总目录](#contents)  
