@@ -200,7 +200,7 @@ FrameWork提供了内建的对PnP和Power的管理，为您（驱动）处理了
 
 那么作为驱动程序，我们需要在这个看上去已经很完美的模型里做些什么呢？回答是当然还有事可做。特别的，对于OSRUSBFX2这个功能驱动来说，主要工作就是和具体设备打交道，控制设备的运行，所以一定会访问设备硬件，自然不可避免处理PnP和Power相关的事务。
 
-驱动和PnP&Power模型打交道的接口也是通过WDF的对象模型暴露出来的，换句话说，从面向对象的角度来考虑，因为我们所讨论的PnP和Power管理操作针对的对象都是一个个具体的设备，所以在WDF里，FrameWork围绕框架设备对象(Device Object)定义了所有和PnP和Power管理相关的事件和方法接口来供驱动实现和调用。这些事件和方法主要包括以下几大方面：
+驱动和PnP&Power模型打交道的接口也是通过WDF的对象模型暴露出来的，换句话说，从面向对象的角度来考虑，因为我们所讨论的PnP和Power管理操作针对的对象都是一个个具体的设备，所以在WDF里，FrameWork围绕框架设备对象(Device Object)定义了所有和PnP和Power管理相关的事件和方法接口来供驱动实现和调用。下面以功能驱动为例子列举一下驱动程序大致需要做的工作。
 
 1. 驱动程序可以在创建设备对象时 在回调函数EvtDriverDeviceAdd中 通过调用WdfDeviceInitSetPnpPowerEventCallbacks注册以下这些事件回调函数（部分或者全部，根据你自己驱动程序的需要）。  
   * EvtDevicePrepareHardware，该函数将设备的系统分配资源传递给驱动程序。驱动程序可执行将设备的总线相关内存映射到处理器的虚拟地址空间等操作，确保硬件能被驱动程序访问。  
@@ -208,7 +208,7 @@ FrameWork提供了内建的对PnP和Power的管理，为您（驱动）处理了
   * EvtDeviceD0Exit，该函数用于执行每当驱动程序的相关设备要退出其工作 (D0) 状态并进入低功耗状态时所需执行的操作。  
   * EvtDeviceReleaseHardware，该函数释放 EvtDevicePrepareHardware 所分配的任何系统内存。  
 2. 功能驱动程序可以通过调用 WdfDeviceSetPnpCapabilities 和 WdfDeviceSetPowerCapabilities，将设备的 PnP 和电源管理功能报告给操作系统。  
-3. 对于大多数 I/O 请求，您通常都会使用框架的电源管理的 I/O 队列。如果 I/O 队列是电源管理的队列，则仅当设备处于其工作 (D0) 状态时框架才会将请求传递到其驱动程序。  
+3. 前面讨论I/O模型的I/O队列时我们已经知道对于大多数I/O请求，为了让FrameWork来帮助我们处理复杂的电源变化事件，驱动通常都会在创建I/O队列时使能电源管理功能委托FrameWork帮助我们管理I/O队列的电源事件。如果I/O队列委托了FrameWork进行电源管理，则仅当设备处于其工作(D0)状态时FrameWork才会将I/O请求传递到其驱动程序。同时驱动也可能需要注册一些回调函数在设备电源事件发生变化时，比如退出D0状态或者被移除时协助FrameWork对队列上未决的请求进行善后处理。  
 4. 设备的功能驱动程序通常是驱动程序堆栈的电源策略所有者。电源策略所有者为设备确定相应的设备电源状态，在设备电源状态发生更改时向设备的驱动程序堆栈发送请求。对于基于框架的驱动程序，框架会负责这一处理，因此您无需在驱动程序中提供用于请求更改设备电源状态的代码。    
 电源策略所有者还具有两个职责：控制设备进入低功耗状态的功能（在设备空闲并且系统保持其工作 (S0) 状态时），以及控制设备生成唤醒信号的功能（当设备在低功耗状态中检测到外部事件时）。如果设备有空闲或唤醒功能，则功能驱动程序可以提供额外的回调函数。
 
@@ -586,7 +586,7 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 在Final版本的代码里，我们将读写操作从缺省队列里剥离出来，分别创建了一个队列来专门处理I/O读请求和另一个队列专门处理I/O写请求。并配置这两个队列以顺序方式分发I/O请求。
 参考Device.c的OsrFxEvtDeviceAdd函数，以创建读队列为例：  
 首先调用`WDF_IO_QUEUE_CONFIG_INIT(&ioQueueConfig, WdfIoQueueDispatchSequential);`该代码是初始化队列并配置为以顺序方式分发I/O请求。
-接着注册回调函数， 这里除了注册OsrFxEvtIoRead，我们还注册了另外一个回调函数OsrFxEvtIoStop，该函数会在设备进入休眠或者设备被移除时被调用，驱动需要在该回调函数中取消还未执行完毕的I/O请求。
+接着注册回调函数， 这里除了注册OsrFxEvtIoRead，我们还注册了另外一个回调函数OsrFxEvtIoStop。因为OSRUSBFX2设备的读写队列委托了FrameWork进行电源管理，则当设备退出工作(D0)状态进入休眠或者设备被移除时，FrameWork会对队列中尚未执行完毕的每一个I/O请求都回调一次OsrFxEvtIoStop。这样驱动就可以有机会在OsrFxEvtIoStop中对尚未完成的I/O请求进行善后处理，比如尽快完成，或者取消，或者直接调用WdfRequestStopAcknowledge将该I/O请求的所有权返回给FrameWork。虽然注册这个回调函数是可选的，但是如果我们的队列委托了FrameWork处理电源管理则驱动最好实现该回调函数并快速地将尚未完成的I/O请求处理完毕，因为FrameWork如果发现一个设备上有队列需要其管理电源状态，则它会等待该队列上未尽的请求全部处理完才会将设备（或者主机系统）退出工作D0（或者S0）状态。所以如果我们的驱动不主动实现EvtIoStop来帮助FrameWork加快处理掉未决的请求则可能会阻碍主机系统进入休眠或者其他低功耗状态，严重的情况下甚至会导致主机系统（即Windows）宕机。具体可以参考[Using Power-Managed I/O Queues]
 `ioQueueConfig.EvtIoRead = OsrFxEvtIoRead;`  
 `ioQueueConfig.EvtIoStop = OsrFxEvtIoStop;`  
 然后调用WdfIoQueueCreate创建队列，没有什么特别之处。创建完成后还要调用WdfDeviceConfigureRequestDispatching，这一步的目的是设置本队列只处理I/O读请求。
@@ -713,6 +713,7 @@ DDMWDF: [Developing Drivers with the Microsoft Windows Driver Foundation](http:/
 [WPP Preprocessor]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff556201(v=vs.85).aspx
 [TraceView]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff553872(v=vs.85).aspx
 [Creating I/O Queues]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff540783(v=vs.85).aspx
+[Using Power-Managed I/O Queues]: http://msdn.microsoft.com/en-us/library/ff545505(v=vs.85).aspx
 
 [SetupDiGetClassDevs]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551069(v=vs.85).aspx
 [SetupDiEnumDeviceInterfaces]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551015(v=vs.85).aspx
