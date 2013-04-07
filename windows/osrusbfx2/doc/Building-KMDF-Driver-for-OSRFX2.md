@@ -1,5 +1,7 @@
 # **Step by Step, 为OSRFX2创建一个KMDF驱动程序**
 
+***特别提醒：从本文撰写的目的角度出发，在一些理论描述上并不想简单地对MSDN上那些大而全的描述进行全文照搬，而是想结合OSRUSBFX2这个例子介绍一些和编写KMDF功能驱动相关的并且在笔者看来重要且常见的概念。所以如果读者发现本文的描述和MSDN的描述有出入，还是应该以MSDN为准。为此本文在正文中如果觉得需要读者去参考MSDN的时候，会给出MSDN的相关主题描述地址，以供甄别。***
+
 <a name="contents" id="contents"></a>
 ## 总目录
 ###[**Chapter 1. 基础知识**](#chapter-1)  
@@ -198,19 +200,12 @@ I/O目标对象从字面上理解就是可以接收I/O请求的对象，具体�
 
 FrameWork提供了内建的对PnP和Power的管理，为您（驱动）处理了大量 PnP 和电源活动，对插拔事件和各种设备相关的状态的迁移提供了缺省操作。因此驱动程序无需包含支持这些活动的代码，更不用自己实现一个复杂的状态机来跟踪PnP和电源状态。例如，当系统即将进入低功耗状态时，框架会处理必须通过驱动程序堆栈的 I/O 请求，以便将系统设备设置为低功耗状态。驱动程序永远看不到这些请求，并且您无需编写任何代码即可处理这些请求。
 
-那么作为驱动程序，我们需要在这个看上去已经很完美的模型里做些什么呢？回答是当然还有事可做。特别的，对于OSRUSBFX2这个功能驱动来说，主要工作就是和具体设备打交道，控制设备的运行，所以一定会访问设备硬件，自然不可避免处理PnP和Power相关的事务。
+那么作为驱动程序，我们需要在这个看上去已经很完美的模型里做些什么呢？回答是当然还有事可做。在WDF的世界里，驱动和PnP&Power模型打交道的接口也是通过WDF的对象模型暴露出来的，换句话说，从面向对象的角度来考虑，因为我们所讨论的PnP和Power管理操作针对的对象都是一个个具体的设备，所以在WDF里，FrameWork围绕框架设备对象(Device Object)定义了所有和PnP和Power管理相关的事件和方法接口来供驱动实现和调用。
 
-驱动和PnP&Power模型打交道的接口也是通过WDF的对象模型暴露出来的，换句话说，从面向对象的角度来考虑，因为我们所讨论的PnP和Power管理操作针对的对象都是一个个具体的设备，所以在WDF里，FrameWork围绕框架设备对象(Device Object)定义了所有和PnP和Power管理相关的事件和方法接口来供驱动实现和调用。下面以功能驱动为例子列举一下驱动程序大致需要做的工作。
+- 驱动程序通过注册并实现一组事件回调函数来响应某些驱动感兴趣的事件，例如，设备移除或设备切换进入或退出其工作 (D0) 状态。  
+- 驱动程序通过调用一组和设备对象有关的方法向FrameWork报告特定于设备的功能，例如，设备在空闲时进入低功耗（睡眠）状态的能力，或设备在发生外部事件时从低功耗状态自行唤醒或唤醒整个系统的能力。
 
-1. 驱动程序可以在创建设备对象时 在回调函数EvtDriverDeviceAdd中 通过调用WdfDeviceInitSetPnpPowerEventCallbacks注册以下这些事件回调函数（部分或者全部，根据你自己驱动程序的需要）。  
-  * EvtDevicePrepareHardware，该函数将设备的系统分配资源传递给驱动程序。驱动程序可执行将设备的总线相关内存映射到处理器的虚拟地址空间等操作，确保硬件能被驱动程序访问。  
-  * EvtDeviceD0Entry，该函数用于执行每当驱动程序的相关设备要进入其工作 (D0) 状态时所需执行的操作，如加载固件等。  
-  * EvtDeviceD0Exit，该函数用于执行每当驱动程序的相关设备要退出其工作 (D0) 状态并进入低功耗状态时所需执行的操作。  
-  * EvtDeviceReleaseHardware，该函数释放 EvtDevicePrepareHardware 所分配的任何系统内存。  
-2. 功能驱动程序可以通过调用 WdfDeviceSetPnpCapabilities 和 WdfDeviceSetPowerCapabilities，将设备的 PnP 和电源管理功能报告给操作系统。  
-3. 前面讨论I/O模型的I/O队列时我们已经知道对于大多数I/O请求，为了让FrameWork来帮助我们处理复杂的电源变化事件，驱动通常都会在创建I/O队列时使能电源管理功能委托FrameWork帮助我们管理I/O队列的电源事件。如果I/O队列委托了FrameWork进行电源管理，则仅当设备处于其工作(D0)状态时FrameWork才会将I/O请求传递到其驱动程序。同时驱动也可能需要注册一些回调函数在设备电源事件发生变化时，比如退出D0状态或者被移除时协助FrameWork对队列上未决的请求进行善后处理。  
-4. 设备的功能驱动程序通常是驱动程序堆栈的电源策略所有者。电源策略所有者为设备确定相应的设备电源状态，在设备电源状态发生更改时向设备的驱动程序堆栈发送请求。对于基于框架的驱动程序，框架会负责这一处理，因此您无需在驱动程序中提供用于请求更改设备电源状态的代码。    
-电源策略所有者还具有两个职责：控制设备进入低功耗状态的功能（在设备空闲并且系统保持其工作 (S0) 状态时），以及控制设备生成唤醒信号的功能（当设备在低功耗状态中检测到外部事件时）。如果设备有空闲或唤醒功能，则功能驱动程序可以提供额外的回调函数。
+我们会在第3章中以OSRUSBFX2这个功能驱动为例详细介绍一下为了支持WDF的即插即用（PnP）和电源（Power）管理模型，驱动程序需要干些什么以及怎么做。
 
 <a name="chapter-2" id="chapter-2"></a>
 ## ***Chapter 2. OSRUSBFX2 - Step By Step***
@@ -623,14 +618,133 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 [返回总目录](#contents) 
 http://msdn.microsoft.com/zh-cn/library/ff544385(v=vs.85).aspx
 
+在1.2.3节中介绍WDF的即插即用（PnP）和电源（Power）管理模型时我们了解到在WDF的世界里虽然FrameWork已经为我们做了很多缺省的操作，但作为驱动程序的我们仍然有一些工作要做，配合FrameWork控制自己的设备。
+特别的，对于OSRUSBFX2这个功能驱动来说，主要工作就是和具体设备打交道，控制设备的运行，所以一定会访问设备硬件，自然不可避免处理PnP和Power相关的事务。
+
+具体要从哪些方面为我们的设备添加支持PnP和Power管理的代码，以OSRFX2为例，有以下几个重要的地方。先列个提纲，后面再逐条详述。注意一点，这里我们结合OSRUSBFX2，它是一个功能驱动，所以我们的描述主要侧重于对功能驱动，至于对其他类型的驱动，比如过滤驱动，总线驱动，还有不同的注意点，这篇文章就不啰嗦了，我们还是侧重于OSRUSBFX2。如果读者想要了解更多基于WDF的KMDF驱动中如何处理PnP和电源管理，可以参考[PnP and Power Management in KMDF Drivers]。
+
+1. 功能驱动程序在创建设备对象时，即在编写回调函数EvtDriverDeviceAdd中需要遵循的一般步骤，以及这些步骤中和支持PnP及电源管理相关的部分，譬如通过调用WdfDeviceInitSetPnpPowerEventCallbacks注册一些重要的和设备添加删除以及电源迁移变化相关的事件回调函数。还有通过调用 WdfDeviceSetPnpCapabilities 和 WdfDeviceSetPowerCapabilities，将设备的 PnP 和电源管理功能报告给操作系统。  
+2. 对使能了电源管理的队列的处理。如何配合FrameWork在电源状态变化时，譬如退出D0状态时及时清理队列。
+3. 设备的功能驱动程序通常是驱动程序堆栈的电源策略所有者，作为电源策略所有者，需要为设备确定相应的设备电源状态，在设备电源状态发生更改时向设备的驱动程序堆栈发送请求。对于基于框架的驱动程序，框架会负责这一处理，因此您无需在驱动程序中提供用于请求更改设备电源状态的代码。    
+电源策略所有者还具有两个职责：控制设备进入低功耗状态的功能（在设备空闲并且系统保持其工作 (S0) 状态时），以及控制设备生成唤醒信号的功能（当设备在低功耗状态中检测到外部事件时）。如果设备有空闲或唤醒功能，则功能驱动程序可以提供额外的回调函数。
+
 <a name="3.2.1" id="3.2.1"></a>
-#### 3.2.1. 
-[返回总目录](#contents)  
+### 3.2.1 在创建设备对象过程中添加对即插即用和电源管理的支持
+[返回总目录](#contents) 
+每个功能驱动程序为系统中存在的其支持的每个设备都创建一个WDF设备对象。因为这些设备对象由功能驱动程序创建，所以它们称为功能设备对象 (FDO)。
+每当我们在PC上插入一个OSRFX2设备的时候，框架就会为这个设备调用驱动程序的 EvtDriverDeviceAdd回调函数来通知OSRUSBFX2驱动程序一个OSRFX2设备来了，然后我们的驱动程序必须在此回调函数里创建一个对应的OSRUSBFX2设备对象。
+
+OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Power管理相关的步骤。有关KMDF功能驱动中所有需要注意的步骤详细，读者可以参考[Creating Device Objects in a Function Driver]：
+
+1. 通过调用WdfDeviceInitSetPnpPowerEventCallbacks注册PnP和Power相关回调函数。包括：  
+  * EvtDevicePrepareHardware，该函数将设备的系统分配资源传递给驱动程序。OSRUSBFX2在EvtDevicePrepareHardware里主要是初始化了驱动需要使用的I/O Target对象，对USB的configuraiton进行了选择和配置，此外还设置了设备的电源策略。有关电源策略的描述会在3.2.3做更详细的描述。  
+  * EvtDeviceD0Entry，该函数用于执行每当驱动程序的相关设备要进入其工作 (D0) 状态时所需执行的操作。  
+  * EvtDeviceD0Exit，该函数用于执行每当驱动程序的相关设备要退出其工作 (D0) 状态并进入低功耗状态时所需执行的操作。  
+  * EvtDeviceReleaseHardware，该函数释放 EvtDevicePrepareHardware 所分配的任何系统内存。在OSRUSBFX2里没有这个必要所以没有注册实现该函数。  
+
+    示例代码如下：  
+    `WDF_PNPPOWER_EVENT_CALLBACKS_INIT(&pnpPowerCallbacks);`
+    `pnpPowerCallbacks.EvtDevicePrepareHardware = OsrFxEvtDevicePrepareHardware;`
+
+    `pnpPowerCallbacks.EvtDeviceD0Entry = OsrFxEvtDeviceD0Entry;`
+    `pnpPowerCallbacks.EvtDeviceD0Exit  = OsrFxEvtDeviceD0Exit;`
+
+    `WdfDeviceInitSetPnpPowerEventCallbacks(DeviceInit, &pnpPowerCallbacks);`
+
+2. 如果设备支持低功耗空闲状态或具有唤醒功能，则功能驱动程序通常还调用 WdfDeviceInitSetPowerPolicyEventCallbacks 以注册电源策略回调函数。在OSRUSBFX2中我们没有这个需求。但如果你自己的设备不排除要注意这一点。
+
+3. 设置设备特征。因为OSRUSBFX2驱动程序需要处理来自应用程序的I/O请求，所以调用WdfDeviceInitSetIoType标识访问数据缓冲区的方法。有关数据缓冲区的访问可以参考[Accessing Data Buffers in KMDF Drivers]。
+
+4. 功能驱动程序可以通过调用 WdfDeviceSetPnpCapabilities 和 WdfDeviceSetPowerCapabilities，将设备的PnP能力报告给操作系统 和电源管理功能报告给操作系统。OSRUSBFX2只是报告了设备处理热插拔的能力，如下：
+    `WDF_DEVICE_PNP_CAPABILITIES_INIT(&pnpCaps);`
+    `pnpCaps.SurpriseRemovalOK = WdfTrue;`
+
+    `WdfDeviceSetPnpCapabilities(device, &pnpCaps);`  
+    其中OSRUSBFX2设置了`WDF_DEVICE_PNP_CAPABILITIES`的SurpriseRemovalOK属性为WdfTrue，这表明用户可以直接将OSRFX2设备直接从PC上拔出而不用使用系统的“安全删除硬件”向导程序。反之如果我们不设置SurpriseRemovalOK为WdfTrue，则表明我们的驱动希望用户采用系统的“安全删除硬件”向导程序来移除我们的设备，这通常发生在一些类似U盘的设备上，而且在这种情况下插上设备，在Windows的右下角托盘上会出现“安全删除硬件”的小图标。  
+![safely-remove-icon](./images/safelyremove-icon.PNG)  
+  双击后还会出现“安全删除硬件”的对话框。  
+![safely-remove-icon](./images/safelyremove-dialogbox.PNG)  
+我们可以尝试删除`pnpCaps.SurpriseRemovalOK = WdfTrue;`看看效果。
+
+5. 功能驱动程序可以通过调用WdfDeviceSetPowerCapabilities，将设备的电源能力报告给操作系统。具体有关电源能力的介绍参考3.2.3.1-电源状态。
 
 
-10-----------------------------------------
-添加设备时要做的事情的总结。
-http://msdn.microsoft.com/zh-cn/library/ff540771(v=vs.85).aspx
+<a name="3.2.2" id="3.2.2"></a>
+### 3.2.2 对I/O队列的电源管理
+[返回总目录](#contents) 
+前面讨论I/O模型的I/O队列时我们已经知道对于大多数I/O请求，为了让FrameWork来帮助我们处理复杂的电源变化事件，驱动通常都会在创建I/O队列时使能电源管理功能委托FrameWork帮助我们管理I/O队列的电源事件。如果I/O队列委托了FrameWork进行电源管理，则仅当设备处于其工作(D0)状态时FrameWork才会将I/O请求传递到其驱动程序。同时驱动也可能需要注册一些回调函数在设备电源事件发生变化时，比如退出D0状态或者被移除时协助FrameWork对队列上未决的请求进行善后处理。相关的介绍可以参考3.1.1节的描述，我这里就不再重复了。
+
+<a name="3.2.3" id="3.2.3"></a>
+### 3.2.3 电源策略所有者
+[返回总目录](#contents) 
+
+根据Windows内核驱动部分的定义：在每个设备栈对应的驱动程序中，有且仅有一个驱动程序必须是相应设备的电源策略所有者。缺省情况下， KMDF假设设备栈中的功能驱动对象(FDO)是该设备的电源策略所有者，所以在这里OSRUSBFX2承担起该角色。
+
+电源策略所有者为设备定义相应的设备电源状态-也就是该设备的电源能力，并在设备电源状态发生更改时向设备的驱动程序堆栈发送请求。但基于KMDF的驱动程序不包含用于请求更改设备电源状态的代码，因为FrameWork将会提供此代码。譬如只要系统进入系统睡眠状态，FrameWork就会要求设备的总线驱动程序将设备电源状态降低为 D3。反之当系统电源返回到其工作 (S0) 状态时，FrameWork将请求总线驱动程序将设备还原为其工作 (D0) 状态。
+
+综上所述，作为OSRFX2设备的电源策略所有者-OSRUSBFX2这个功能驱动对电源策略的首要管理主要工作就是定义电源状态的能力并报告给FrameWork。
+
+其次，电源策略所有者还具有两个主要职责：控制设备进入低功耗状态的功能（在设备空闲并且系统保持其工作 (S0) 状态时），以及控制设备生成唤醒信号的功能（当设备在低功耗状态中检测到外部事件时）。如果设备有空闲或唤醒功能，则功能驱动程序可以提供额外的回调函数。
+
+#### 3.2.3.1 电源状态Power States
+在描述电源策略所有者的主要职责之前，首先来重点回顾一下“电源状态”的概念。简而言之，电源状态是指系统或者设备的耗电量水平的度量。  
+
+系统电源状态以S开头，从S0到Sx （x为1,2,3,4,5）,S0代表系统正常工作时的电源状态，而S1到S4表示的是系统的可睡眠电源状态（[System Sleeping States]），耗电量从1到4依次递减，S5代表关机(off)。需要注意的是S5和其他的Sx（S1，S2，S3，S4）还是有区别的，S5表示系统完全断电，而在S1和S4下虽然系统已经停止了计算并进入睡眠但电脑设备还上着电，随时可以不用重启操作系统而恢复到工作状态。
+
+设备电源状态以D开头，从D0到Dx（x为1,2,3），D0表示设备满负荷正常工作状态，Dx表示设备的低功耗（low-power）电源状态（[Device Low-Power States]），耗电量从1到3依次递减。所有的设备都必须支持D0和D3，但对已D1和D2并非所有设备都会支持，实际上大部分设备只支持D0和D3，OSRFX2也是一样。要注意的是对于USB设备，D3表示最低能耗状态并且有D3hot和D3cold之分，我们可以认为D3cold几乎就是设备不工作了，因为此时在总线上已经无法检测到其存在，而D3hot还是可以检测到的。
+
+对设备来说可以从D0直接迁移为任何Dx状态，也可以从Dx直接迁移为D0，但不可以在Dx之间直接迁移状态，简单来说，如果要从D1迁移到D3，则设备首先要从D1迁移到D0，也就是上电进入正常工作模式，然后再从D0迁移到D3。。原因很简单：在休眠甚至断电状态下访问、改变硬件配置是被禁止的，必须先回到工作状态D0方可。
+
+#### 3.2.3.1 设备电源能力
+
+所谓设备的电源能力主要我们可以直接参考[WDF_DEVICE_POWER_CAPABILITIES]来加深我们的理解。
+`typedef struct _WDF_DEVICE_POWER_CAPABILITIES {`  
+`  ULONG              Size;`  
+
+//第一项：除了D0和D3外设备是否还支持D1和D2  
+`  WDF_TRI_STATE      DeviceD1;`  
+`  WDF_TRI_STATE      DeviceD2;`  
+
+//第二项：当设备进入休眠状态后，什么电源状态下可以可被唤醒。  
+//注意D0本身就是醒着的，但仍可以接受一个Wake信号。  
+`  WDF_TRI_STATE      WakeFromD0;`  
+`  WDF_TRI_STATE      WakeFromD1;`  
+`  WDF_TRI_STATE      WakeFromD2;`  
+`  WDF_TRI_STATE      WakeFromD3;`  
+
+//第三项：针对每个Sx状态，设备可以支持的最高电源状态Dx。
+`  DEVICE_POWER_STATE DeviceState[PowerSystemMaximum];`  
+
+//以下第四项和第五项都是有关设备唤醒系统的能力配置  
+//第四项:设备侧最低的可以发送唤醒系统信号的电源状态。例如，如果这个值是D1，则设备在D0和D1状态下都可以发送信号将系统从休眠中唤醒，而设备如果是D2和D3则不行。
+`  DEVICE_POWER_STATE DeviceWake;`  
+
+//第五项：系统侧可以接受设备唤醒信号并苏醒的最低的电源状态。例如，如果这个值是S3，则当系统在S4或者S5状态下是不可以被设备唤醒的。  
+`  SYSTEM_POWER_STATE SystemWake;`  
+
+//第六项：设备从低功耗睡眠状态D1~D3恢复为正常工作状态D0的大致时长，以100纳秒为计时单位。
+`  ULONG              D1Latency;`  
+`  ULONG              D2Latency;`  
+`  ULONG              D3Latency;`  
+
+//第七项：当系统进入睡眠状态（[System Sleeping States]）后，连接的设备应该对应地进入的低功耗状态（[Device Low-Power States]）。默认为D3，可以被设置为D1或者D2，但不可以为D0。也就是说系统都进入睡眠状态后设备必须也进入低功耗状态。  
+`  DEVICE_POWER_STATE IdealDxStateForSx;`  
+`} WDF_DEVICE_POWER_CAPABILITIES, *PWDF_DEVICE_POWER_CAPABILITIES;`  
+
+驱动需要将设备的电源能力通过FrameWork报告给系统。设备栈的每一级驱动都可以通过调用WdfDeviceSetPowerCapabilities设置电源能力。对于OSRUSBFX2来说其并没有专门设置OSRFX2的电源能力，所以系统直接使用了USB总线驱动设置的电源能力来控制该设备。所以参考CY001的说明文档，OSRUSBFX2的电源能力应该也是类似的：不支持第一项（即只有D0和D3状态），其他项都支持。在被支持的能力中，只有“闲时休眠”和“远程唤醒”两项有专门的策略设置，其他的都取系统默认。有关“闲时休眠”和“远程唤醒”的设置有另外章节介绍。
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 5----------------------------------------
 D0 D1 and etc
@@ -692,7 +806,12 @@ DDMWDF: [Developing Drivers with the Microsoft Windows Driver Foundation](http:/
 [有关异步读写、通信]:http://hi.baidu.com/linglux/item/39617e3fb672434b033edc3b
 [I/O Completion Port(I/O完成对象)的原理与实现]: http://blog.csdn.net/fengxinze/article/details/7027352
 
-
+[Device Low-Power States]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff543186(v=vs.85).aspx#D3
+[System Sleeping States]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff564575(v=vs.85).aspx
+[Device Power States]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff543162(v=vs.85).aspx
+[Accessing Data Buffers in KMDF Drivers]: http://msdn.microsoft.com/en-us/library/ff540701(v=vs.85).aspx
+[Creating Device Objects in a Function Driver]: http://msdn.microsoft.com/en-us/library/ff540771(v=vs.85).aspx
+[PnP and Power Management in KMDF Drivers]: http://msdn.microsoft.com/en-us/library/ff544385(v=vs.85).aspx
 [Device Tree]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff543194(v=vs.85).aspx
 [device stack]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff556277(v=vs.85).aspx#wdkgloss.device_stack
 [Framework Object Context Space]: http://msdn.microsoft.com/en-us/library/ff542873(v=vs.85).aspx
