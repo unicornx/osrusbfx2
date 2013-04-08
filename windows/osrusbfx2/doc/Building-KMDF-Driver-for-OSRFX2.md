@@ -203,7 +203,7 @@ I/O目标对象从字面上理解就是可以接收I/O请求的对象，具体�
 #### 1.2.3. 即插即用（PnP）和电源（Power）管理模型	
 [返回总目录](#contents) 
 
-即插即用(PnP)和电源(Power)管理操作是两个密不可分的，所以我们认为这是一个统一的模型。
+即插即用(PnP)和电源(Power)管理操作是两个密不可分的，所以我们把这两个概念统一到一个模型里来讨论。
 
 FrameWork提供了内建的对PnP和Power的管理，为您（驱动）处理了大量 PnP 和电源活动，对插拔事件和各种设备相关的状态的迁移提供了缺省操作。因此驱动程序无需包含支持这些活动的代码，更不用自己实现一个复杂的状态机来跟踪PnP和电源状态。例如，当系统即将进入低功耗状态时，框架会处理必须通过驱动程序堆栈的 I/O 请求，以便将系统设备设置为低功耗状态。驱动程序永远看不到这些请求，并且您无需编写任何代码即可处理这些请求。
 
@@ -740,7 +740,7 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 `  DEVICE_POWER_STATE IdealDxStateForSx;`  
 `} WDF_DEVICE_POWER_CAPABILITIES, *PWDF_DEVICE_POWER_CAPABILITIES;`  
 
-驱动需要将设备的电源能力通过FrameWork报告给系统。设备栈的每一级驱动都可以通过调用WdfDeviceSetPowerCapabilities设置电源能力。对于OSRUSBFX2来说其并没有专门设置OSRFX2的电源能力，所以系统直接使用了USB总线驱动设置的电源能力来控制该设备。WDF并没有提供专门的读取PowerCapability的API，但我们总是可以自己构造IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES来读取。我目前还没有试过，但我们可以通过做一个小实验并看一下驱动的日志来猜测和验证一下先。日志见下图：  
+驱动需要将设备的电源能力通过FrameWork报告给系统。设备栈的每一级驱动都可以通过调用WdfDeviceSetPowerCapabilities设置电源能力。对于OSRUSBFX2来说其并没有专门设置OSRFX2的电源能力，所以系统直接使用了USB总线驱动设置的电源能力来控制该设备。WDF并没有提供专门的读取PowerCapability的API，但我们总是可以自己构造IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES来读取，可惜我目前还没有试过，但我们可以通过Windows在设备管理器里对设备提供一些接口来得到部分信息，同时我们还可以做一个小实验并看一下驱动的日志来验证一下。先介绍一下这个小实验。日志见下图：  
 ![state-transfer](./images/state-transfer.PNG)  
 我们可以看到日志主要分以下六个阶段：  
 
@@ -753,7 +753,7 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 - Step7：Sequence# 27~28，设备空闲，又进入低功耗状态D2。  
 - Step8：Sequence# 29~33，将设备从主机拔除，设备先恢复进入D0，再进入D3Final。
 
-通过分析以上的数据我们可以发现OSRUSBFX2的电源能力应该满足如下：
+然后我们来看一下OSRUSBFX2的电源能力，结合前面介绍的`WDF_DEVICE_POWER_CAPABILITIES`数据结构中的七大项，应该满足如下：
 
 - 第一项：可以通过设备管理器，找到设备后右键点击“属性”，在弹出的属性页中选择“详细信息”后在下拉列表中可以找到“电容量”项（:-)天知道MS怎么会这么翻译，看看英文版的WindowsXP，明明是“Power Capabilities”）。  
 ![power-capabilities](./images/power-capabilities.PNG)  
@@ -766,6 +766,12 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 - 第四项不清楚，需要用IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES实际读一下。但可以根据第三项和驱动日志猜测，因为系统睡眠后设备都对应的是D3，而我们知道从日志的Step5可以发现D3并无法唤醒系统，所以这个DeviceWake还真不知道是什么。  
 - 第五和六不清楚，需要用IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES实际读一下。  
 - 第七项，从Step5可以知道系统进入睡眠后，连接的设备进入的应该是D3。
+
+
+支持空闲省电功能
+
+所谓空闲省电功能是指一些设备可在系统保持其工作状态S0时进入睡眠状态。对于此类设备，如果设备在预定（可设置）时间内一直处于空闲（未使用）状态，则FrameWork将使设备进入低功耗状态以节省耗电和减少发热对设备的影响。
+
 
 
 
@@ -884,6 +890,8 @@ http://msdn.microsoft.com/zh-cn/library/ff544385(v=vs.85).aspx
 [ReadFile]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365467(v=vs.85).aspx
 [WriteFile]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365747(v=vs.85).aspx
 
+[WDF_DEVICE_POWER_POLICY_WAKE_SETTINGS_INIT]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551279(v=vs.85).aspx
+[WDF_DEVICE_POWER_POLICY_IDLE_SETTINGS_INIT]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551271(v=vs.85).aspx
 [WdfDriverCreate]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff547175(v=vs.85).aspx
 [WdfDeviceCreate]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff545926(v=vs.85).aspx
 [WdfDeviceInitSetPnpPowerEventCallbacks]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff546135(v=vs.85).aspx
