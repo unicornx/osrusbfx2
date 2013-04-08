@@ -46,7 +46,14 @@
 
 [**3.1. 优化读和写**](#3.1)  
 [3.1.1. 完善驱动的读写队列](#3.1.1)  
-[3.1.2. 测试程序的同步和异步读写](#3.1.2)    
+[3.1.2. 测试程序的同步和异步读写](#3.1.2)   
+
+[**3.2. 即插即用和电源管理**](#3.2)  
+[3.2.1 在创建设备对象过程中添加对即插即用和电源管理的支持](#3.2.1)  
+[3.2.2 对I/O队列的电源管理](#3.2.2)  
+[3.2.3 电源策略所有者](#3.2.3)  
+
+
 
 <a name="chapter-1" id="chapter-1"></a>
 ## ***Chapter 1. 基础知识***
@@ -616,7 +623,6 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 <a name="3.2" id="3.2"></a>
 ### 3.2. 即插即用和电源管理
 [返回总目录](#contents) 
-http://msdn.microsoft.com/zh-cn/library/ff544385(v=vs.85).aspx
 
 在1.2.3节中介绍WDF的即插即用（PnP）和电源（Power）管理模型时我们了解到在WDF的世界里虽然FrameWork已经为我们做了很多缺省的操作，但作为驱动程序的我们仍然有一些工作要做，配合FrameWork控制自己的设备。
 特别的，对于OSRUSBFX2这个功能驱动来说，主要工作就是和具体设备打交道，控制设备的运行，所以一定会访问设备硬件，自然不可避免处理PnP和Power相关的事务。
@@ -630,7 +636,8 @@ http://msdn.microsoft.com/zh-cn/library/ff544385(v=vs.85).aspx
 
 <a name="3.2.1" id="3.2.1"></a>
 ### 3.2.1 在创建设备对象过程中添加对即插即用和电源管理的支持
-[返回总目录](#contents) 
+[返回总目录](#contents)   
+
 每个功能驱动程序为系统中存在的其支持的每个设备都创建一个WDF设备对象。因为这些设备对象由功能驱动程序创建，所以它们称为功能设备对象 (FDO)。
 每当我们在PC上插入一个OSRFX2设备的时候，框架就会为这个设备调用驱动程序的 EvtDriverDeviceAdd回调函数来通知OSRUSBFX2驱动程序一个OSRFX2设备来了，然后我们的驱动程序必须在此回调函数里创建一个对应的OSRUSBFX2设备对象。
 
@@ -672,6 +679,7 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 <a name="3.2.2" id="3.2.2"></a>
 ### 3.2.2 对I/O队列的电源管理
 [返回总目录](#contents) 
+
 前面讨论I/O模型的I/O队列时我们已经知道对于大多数I/O请求，为了让FrameWork来帮助我们处理复杂的电源变化事件，驱动通常都会在创建I/O队列时使能电源管理功能委托FrameWork帮助我们管理I/O队列的电源事件。如果I/O队列委托了FrameWork进行电源管理，则仅当设备处于其工作(D0)状态时FrameWork才会将I/O请求传递到其驱动程序。同时驱动也可能需要注册一些回调函数在设备电源事件发生变化时，比如退出D0状态或者被移除时协助FrameWork对队列上未决的请求进行善后处理。相关的介绍可以参考3.1.1节的描述，我这里就不再重复了。
 
 <a name="3.2.3" id="3.2.3"></a>
@@ -696,7 +704,7 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 
 对设备来说可以从D0直接迁移为任何Dx状态，也可以从Dx直接迁移为D0，但不可以在Dx之间直接迁移状态，简单来说，如果要从D1迁移到D3，则设备首先要从D1迁移到D0，也就是上电进入正常工作模式，然后再从D0迁移到D3。。原因很简单：在休眠甚至断电状态下访问、改变硬件配置是被禁止的，必须先回到工作状态D0方可。
 
-#### 3.2.3.1 设备电源能力
+#### 3.2.3.2 设备电源能力
 
 所谓设备的电源能力主要我们可以直接参考[WDF_DEVICE_POWER_CAPABILITIES]来加深我们的理解。
 `typedef struct _WDF_DEVICE_POWER_CAPABILITIES {`  
@@ -732,11 +740,36 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 `  DEVICE_POWER_STATE IdealDxStateForSx;`  
 `} WDF_DEVICE_POWER_CAPABILITIES, *PWDF_DEVICE_POWER_CAPABILITIES;`  
 
-驱动需要将设备的电源能力通过FrameWork报告给系统。设备栈的每一级驱动都可以通过调用WdfDeviceSetPowerCapabilities设置电源能力。对于OSRUSBFX2来说其并没有专门设置OSRFX2的电源能力，所以系统直接使用了USB总线驱动设置的电源能力来控制该设备。参考CY001的说明文档，OSRUSBFX2的电源能力应该也是类似的：
-不支持第一项（即只有D0和D3状态）。其他项都支持。在被支持的能力中，只有“闲时休眠”和“远程唤醒”两项有专门的策略设置，其他的都取系统默认。有关“闲时休眠”和“远程唤醒”的设置有另外章节介绍。
-特别的，对第三项，也就是电源状态映射表，我们可以通过设备管理器，找到设备后右键点击“属性”，在弹出的属性页中选择“详细信息”后在下拉列表中可以找到“电源状态映射”项，如下图：  
+驱动需要将设备的电源能力通过FrameWork报告给系统。设备栈的每一级驱动都可以通过调用WdfDeviceSetPowerCapabilities设置电源能力。对于OSRUSBFX2来说其并没有专门设置OSRFX2的电源能力，所以系统直接使用了USB总线驱动设置的电源能力来控制该设备。WDF并没有提供专门的读取PowerCapability的API，但我们总是可以自己构造IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES来读取。我目前还没有试过，但我们可以通过做一个小实验并看一下驱动的日志来猜测和验证一下先。日志见下图：  
+![state-transfer](./images/state-transfer.PNG)  
+我们可以看到日志主要分以下六个阶段：  
+
+- Step1：Sequence#  1~14，设备上电一直到进入工作状态D0。  
+- Step2：Sequence# 15~16，设备空闲，进入低功耗状态D2。  
+- Step3：Sequence# 17~18，按OSRFX2（CY001）上的“Wakeup”按钮，设备被唤醒恢复工作状态D0。  
+- Step4：Sequence# 19~20，设备空闲，又进入低功耗状态D2。  
+- Step5：Sequence# 21~24，主机空闲进入待机状态，设备也被迫进入低功耗状态D3，注意设备的Power状态要恢复D0，然后再进入D3。此时按OSRFX2（CY001）上的“Wakeup”按钮无法将设备唤醒，也无法将系统唤醒。  
+- Step6：Sequence# 25~26，此时晃动鼠标，主机被唤醒，设备也被唤醒，进入工作状态D0。  
+- Step7：Sequence# 27~28，设备空闲，又进入低功耗状态D2。  
+- Step8：Sequence# 29~33，将设备从主机拔除，设备先恢复进入D0，再进入D3Final。
+
+通过分析以上的数据我们可以发现OSRUSBFX2的电源能力应该满足如下：
+
+- 第一项：可以通过设备管理器，找到设备后右键点击“属性”，在弹出的属性页中选择“详细信息”后在下拉列表中可以找到“电容量”项（:-)天知道MS怎么会这么翻译，看看英文版的WindowsXP，明明是“Power Capabilities”）。  
+![power-capabilities](./images/power-capabilities.PNG)  
+可见除了D0和D3外，还支持D1和D2。从我们的测试的Step2可以看到设备会进入D2，但如何进入D1还不是很清楚。  
+*注：在Windows7上所有和电源能力相关的都被移到了“电源数据”一项。*
+- 第二项：同第一项，见上图，说明设备进入休眠后，在D0，D1和D2下都可以唤醒，但无法从D3下被唤醒。从Step3和Step5可以验证设备在D2下可以被唤醒，但在D3下不行。
+- 第三项：也就是电源状态映射表，我们可以通过设备管理器，找到设备后右键点击“属性”，在弹出的属性页中选择“详细信息”后在下拉列表中可以找到“电源状态映射”项，如下图：  
 ![powerstate-mapping](./images/powerstate-mapping.PNG)  
 从上图可以看出，S0状态映射到设备的D0状态——S0映射到所有设备的D0状态；其他的系统状态都映射到D3。这表明当系统进入S0工作状态的时候，有能力为OSRFX2提供最大电源供应（D0）；当系统离开S0状态（S1到S5）时，设备从系统获取到的电源只够其维持在D3状态。
+- 第四项不清楚，需要用IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES实际读一下。但可以根据第三项和驱动日志猜测，因为系统睡眠后设备都对应的是D3，而我们知道从日志的Step5可以发现D3并无法唤醒系统，所以这个DeviceWake还真不知道是什么。  
+- 第五和六不清楚，需要用IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES实际读一下。  
+- 第七项，从Step5可以知道系统进入睡眠后，连接的设备进入的应该是D3。
+
+
+
+在被支持的能力中，只有“闲时休眠”和“远程唤醒”两项有专门的策略设置，其他的都取系统默认。有关“闲时休眠”和“远程唤醒”的设置有另外章节介绍。
 
 
 
@@ -799,6 +832,8 @@ http://channel9.msdn.com/Shows/Going+Deep/Doron-Holan-Kernel-Mode-Driver-Framewo
 DDMWDF: [Developing Drivers with the Microsoft Windows Driver Foundation](http://flylib.com/books/en/3.141.1.1/1/)  
 
 
+
+http://msdn.microsoft.com/zh-cn/library/ff544385(v=vs.85).aspx
 
 [DDMWDF翻译]: http://my.csdn.net/cyx1231st
 [Synchronous and Asynchronous I/O]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365683(v=vs.85).aspx
