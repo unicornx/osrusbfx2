@@ -767,23 +767,27 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 - 第五和六不清楚，需要用IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES实际读一下。  
 - 第七项，从Step5可以知道系统进入睡眠后，连接的设备进入的应该是D3。
 
+#### 3.2.3.3 空闲省电和远程唤醒
+电源策略所有者还具有两个重要的职责：控制设备进入空闲节电的功能，以及控制设备生成唤醒信号的功能。
 
-支持空闲省电功能
+首先对这两个功能介绍一下定义，概念定义很重要。
 
-所谓空闲省电功能是指一些设备可在系统保持其工作状态S0时进入睡眠状态。对于此类设备，如果设备在预定（可设置）时间内一直处于空闲（未使用）状态，则FrameWork将使设备进入低功耗状态以节省耗电和减少发热对设备的影响。
+ - **空闲节电功能**：所谓空闲节电功能是指一些设备可在系统保持其工作状态S0时进入睡眠（低功耗）状态。对于此类设备，如果设备在预定（可设置）时间内一直处于空闲（未使用）状态，则FrameWork将使设备进入低功耗状态以节省耗电和减少发热对设备的影响。
 
+ - **远程唤醒功能**：USB的定义叫Remote Wakeup（但注意远程唤醒不仅仅局限在USB设备上）。是指有些设备可以将自己，也可以将主机系统，从低功耗的睡眠状态（Dx或者Sx）唤醒为正常工作状态（D0或者S0）。根据发生唤醒时主机设备的电源状态不同，可以将唤醒分成如下三类：
+    - **S0唤醒**：系统处于S0状态，设备处于空闲节电睡眠状态，此时如果在设备上发生外部刺激导致设备触发了唤醒信号，则在FrameWork和驱动的共同作用下设备被设置返回工作状态。在OSRFX2（CY001）上的外部刺激就是我们按压“WAKEUP”按钮。
+    - **Sx唤醒**：系统处于Sx状态，x为1，2，3或者4。此时如果在设备上发生外部刺激导致设备触发了唤醒信号，则在FrameWork和驱动的共同作用下设备被设置返回工作状态。注意对Sx唤醒设备并不一定是在低功耗状态，但大部分情况下系统进入Sx后设备也会被置于低功耗状态。
+    - **S5唤醒**：系统处于S5(off)状态，此时如果在设备上发生外部刺激导致设备触发了唤醒信号，会将主机系统唤醒返回开机工作状态。对这种唤醒我们这里不多讨论，因为为了支持这种功能，需要主机的BIOS支持并在BIOS中予以支持，这超出了操作系统的支持范围。
 
-
-
-在被支持的能力中，只有“闲时休眠”和“远程唤醒”两项有专门的策略设置，其他的都取系统默认。有关“闲时休眠”和“远程唤醒”的设置有另外章节介绍。
-
-
-
-
-
-
+所以在OSRFX2上我们常说的唤醒都是指**S0换醒**或者**Sx唤醒**。
 
 
+<a name="3.2.4" id="3.2.4"></a>
+### 3.2.4 中断端点处理
+[返回总目录](#contents) 
+
+Chapter 9: I/O Targets
+USB I/O Targets
 
 
 
@@ -792,8 +796,16 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 
 
 
-5----------------------------------------
-D0 D1 and etc
+
+
+
+
+
+
+
+
+
+
 
 4----------------------------------------
 Continues Reader for the interrupt ep
@@ -890,6 +902,7 @@ http://msdn.microsoft.com/zh-cn/library/ff544385(v=vs.85).aspx
 [ReadFile]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365467(v=vs.85).aspx
 [WriteFile]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365747(v=vs.85).aspx
 
+[WDF_DEVICE_POWER_POLICY_IDLE_SETTINGS_INIT]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551271(v=vs.85).aspx
 [WDF_DEVICE_POWER_POLICY_WAKE_SETTINGS_INIT]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551279(v=vs.85).aspx
 [WDF_DEVICE_POWER_POLICY_IDLE_SETTINGS_INIT]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551271(v=vs.85).aspx
 [WdfDriverCreate]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff547175(v=vs.85).aspx
