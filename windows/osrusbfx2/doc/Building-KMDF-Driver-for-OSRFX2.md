@@ -72,6 +72,7 @@
 [3.2.3.2. 设备电源能力](#3.2.3.2)  
 [3.2.3.3. 空闲节电和远程唤醒](#3.2.3.3)  
 
+###[**参考文献**](#references)
 
 
 <a name="chapter-1" id="chapter-1"></a>
@@ -880,6 +881,49 @@ WDF并没有提供专门的读取PowerCapability的API，但我们总是可以�
     综上所述可见，我们平时常说的**远程唤醒**应该都是指**Sx唤醒**。
 
 讲到这里，其实重要的内容都讲完了，要说OSRUSBFX2里的代码，其实倒变成次要的了。因为代码比较简单，大家可以直接参考DDMWDF的“Chapter 7: Plug and Play and Power Management”的“Advanced Power Management for KMDF Drivers”部分，它也是对照OSRUSBFX2的例子来讲的。还是那句话，如果大家真心想看中文翻译可以告诉我，我再找时间补上。
+
+
+<a name="3.2.4" id="3.2.4"></a>
+### 3.2.4 中断端点处理
+[返回总目录](#contents) 
+
+Chapter 9: I/O Targets
+USB I/O Targets
+
+
+4----------------------------------------
+Continues Reader for the interrupt ep
+manual queue
+
+9---------------------------------
+Reset & Reenumerate
+
+================================================
+
+
+1-----------------------------
+
+在您的驱动程序中帮助防止缓冲区溢出，使用安全字符串函数
+http://www.microsoft.com/china/whdc/driver/tips/SafeString.mspx
+
+1.1 __drv_requiresIRQL(PASSIVE_LEVEL)
+
+2----------------------------------------
+Stampinf: http://msdn.microsoft.com/en-us/library/windows/hardware/ff552786(v=vs.85).aspx
+
+3----------------------------------------
+Event trace
+
+
+
+6-----------------------------------------
+Locking Pageable Code or Data: http://msdn.microsoft.com/en-us/library/windows/hardware/ff554307(v=vs.85).aspx
+PAGED_CODE();
+
+
+8 ------------------------------
+WdfUsbTargetDeviceRetrieveInformation 获取设备属性
+
 
 
 <a name="references" id="references"></a>
