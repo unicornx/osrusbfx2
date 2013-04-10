@@ -12,8 +12,17 @@
 [1.1.3 设备节点和设备树](#1.1.3)
 
 [**1.2 WDF简介**](#1.2)  
+
 [1.2.1. 设计良好的对象模型](#1.2.1)  
+[1.2.1.1 对象的编程接口](#1.2.1.1)  
+[1.2.1.2 在对象模型中提供了一套设计精巧的对象依附关系](#1.2.1.2)  
+[1.2.1.3 对象的上下文空间](#1.2.1.2)  
+
 [1.2.2. 统一的I/O模型](#1.2.2)  
+[1.2.2.1 I/O Request](#1.2.2.1)  
+[1.2.2.2 I/O队列（Queue）](#1.2.2.2)  
+[1.2.2.3 I/O Targets](#1.2.2.3)  
+
 [1.2.3. 即插即用（PnP）和电源（Power）管理模型](#1.2.3)  
 
 ###[**Chapter 2. OSRUSBFX2 - Step By Step**](#chapter-2)  
@@ -39,7 +48,13 @@
 
 [**2.5. Step5 -  为驱动加上日志跟踪**](#2.5)  
 [2.5.1. Windows软件跟踪预处理器-WPP](#2.5.1)  
+
 [2.5.2. 为驱动添加支持WPP](#2.5.2)  
+[2.5.2.1 定义Control GUID和跟踪标志](#2.5.2.1)  
+[2.5.2.2 包含TMH文件](#2.5.2.2)  
+[2.5.2.3 在工程中添加对WPP的调用](#2.5.2.3)  
+[2.5.2.4 WPP的初始化和清除](#2.5.2.4)  
+
 [2.5.3. 使用TraceView观察WPP日志打印](#2.5.3)  
 
 ###[**Chapter 3. Final -  OSRUSBFX2的最终版本**](#chapter-3)
@@ -51,7 +66,11 @@
 [**3.2. 即插即用和电源管理**](#3.2)  
 [3.2.1 在创建设备对象过程中添加对即插即用和电源管理的支持](#3.2.1)  
 [3.2.2 对I/O队列的电源管理](#3.2.2)  
+
 [3.2.3 电源策略所有者](#3.2.3)  
+[3.2.3.1 电源状态Power States](#3.2.3.1)  
+[3.2.3.2 设备电源能力](#3.2.3.2)  
+[3.2.3.3 空闲节电和远程唤醒](#3.2.3.3)  
 
 
 
@@ -128,13 +147,17 @@ WDF为各种各样的设备类型抽象了一个统一的驱动模型，这个�
 
 WDF将Windows的内核数据结构和与驱动操作相关的数据结构封装为对象，例如设备（device）,驱动（driver）, I/O请求（I/O request）, 队列（queue）等等。这些对象有些是由FrameWork创建并传递给WDF驱动使用，有些对象可以由驱动代码根据自己的需要创建，使用并删除。我们驱动要做的一件很重要的事情就是要学会和这些WDF对象打交道并把他们组织起来为实现我们设备的特定功能服务。
 
+<a name="1.2.1.1" id="1.2.1.1"></a>
 ##### 1.2.1.1. 对象的编程接口
+[返回总目录](#contents) 
 
  * 每个对象有属性(Properties),对属相的访问要通过方法(Methods)。
  * 每个对象提供了操作方法(Methods)，WDF驱动通过调用这些函数操作对象的属性或者指示对象动作。  
  * 每个对象支持事件 (Events)。实现上是回调函数。FrameWork提供了对这些事件的缺省处理，我们的驱动不需要去关心所有的回调函数，但是如果我们的驱动希望对某个事件添加自己的特定于设备的处理时（这总是需要的），则可以注册这个事件的回调函数。这样当系统状态改变或者一个I/O请求发生时FrameWork就会调用驱动注册的回调函数，并执行我们驱动自己的代码，可以类比于C++中的重载一样。  
 
+<a name="1.2.1.2" id="1.2.1.2"></a>
 ##### 1.2.1.2 在对象模型中提供了一套设计精巧的对象依附关系
+[返回总目录](#contents) 
 
 这套关系可以帮助我们的驱动代码简化对对象生命周期的管理，具体来说，如果一个对象B是依附于等级A，那么当A被删除时，FrameWork会自动删除对象B。就像封建社会的主人和仆从的关系，主子完蛋的时候，仆从也要跟着一起玩完。  
 
@@ -142,7 +165,9 @@ WDF将Windows的内核数据结构和与驱动操作相关的数据结构封装�
  * 有些对象必须依附于Device对象，或者是Device对象的仆从对象的仆从。比如Queue对象，都依附于Device而存在。  
  * 有些对象可以有多个主子，比如Memory对象。
 
+<a name="1.2.1.3" id="1.2.1.3"></a>
 ##### 1.2.1.3 对象的上下文空间
+[返回总目录](#contents)  
 
 FrameWork模型中的对象的数据结构都是由WDF定义好的，驱动如果为了自己设备的需要想要扩展这些对象存储的数据，可以为对象增加上下文空间。FrameWork对象数据结构中有一个域存放了指向这个上下文空间的句柄。
 
@@ -158,7 +183,9 @@ FrameWork做为OS和驱动之间的一个中间层，当Windows向WDF驱动发�
 
 不需要跟踪管理复杂的I/O状态、事件,也不需要太多顾虑事件的同步，基于WDF的驱动要做的事情就只剩下创建合适的队列和注册定义在队列上的事件处理回调函数并加入自己的处理代码就可以了。  
 
+<a name="1.2.2.1" id="1.2.2.1"></a>
 ##### 1.2.2.1. I/O Request
+[返回总目录](#contents) 
 
 I/O请求有三种类型：包括Read请求，Write请求和Device I/O Control请求。
 有关KMDF驱动中处理I/O Requests相关的概念，更详细的描述可以参考[Handling I/O Requests in KMDF Drivers]。
@@ -170,6 +197,7 @@ Windows的I/O处理在内核中都是异步的，所以在没有WDF之前驱动�
 
 <a name="1.2.2.2" id="1.2.2.2"></a>
 ##### 1.2.2.2. I/O队列（Queue）
+[返回总目录](#contents) 
 
 为了简化驱动程序员编写WDM驱动的工作量和处理并行I/O事件，串行I/O事件的复杂性，WDF抽象出了I/O队列的概念来缓存驱动需要处理的I/O请求，这就是I/O队列对象[Framework Queue Objects]。
 
@@ -185,7 +213,9 @@ Windows的I/O处理在内核中都是异步的，所以在没有WDF之前驱动�
  * FrameWork应该怎样将队列上的I/O请求分发给WDF驱动。Parallel，Sequential还是Manual。  
  * 当PnP和Power事件发生时FrameWork应该如何处理队列，包括启动，停止还是恢复队列。  如果我们希望FrameWork帮助我们管理影响队列的电源状态变化事件，那么我们就配置这个队列是使能电源管理的。只要这样FrameWork就会为我们检测电源状态变化，并在设备进入工作状态时才会为其分发消息，此时队列自动开始工作；当设备退出工作状态时，FrameWork就让队列停止工作，不会为该队列分发消息了。这么做的好处就是驱动如果知道这个队列是使能了电源管理的，则收到I/O请求时就不用再去确认设备的状态了。当然我们也可以不让FrameWork为我们的队列管理电源状态变化。更详细的描述可以参考DDMWDF第7章"Plug and Play and Power Management Support in WDF"。
 
+<a name="1.2.2.3" id="1.2.2.3"></a>
 ##### 1.2.2.3. I/O Targets
+[返回总目录](#contents) 
 
 I/O目标对象从字面上理解就是可以接收I/O请求的对象，具体来说它代表了接收请求的运行在内核态的驱动实体。  
 
@@ -505,7 +535,10 @@ Windows软件跟踪预处理器([Windows software trace PreProcessor])，简称W
 
 前面了解了WPP的优点，现在让我们来看看如何一步一步地在我们驱动的代码中支持WPP进行日志跟踪。
 
+<a name="2.5.2.1" id="2.5.2.1"></a>
 ##### 2.5.2.1. 定义Control GUID和跟踪标志
+[返回总目录](#contents)  
+
 对于记录日志跟踪的软件来说，比如TraceView，它需要在一个跟踪会话中区分日志发生的来源。WPP定义使用GUID来标识这些源。一个GUID代表一个源，WPP叫它Control GUID。而且我们知道GUID的特点就是这些源ID不可能是重复的。  
 一个驱动模块(sys)可以是一个源，我们也可以在一个驱动模块中定义多个源。多个驱动模块也可以共用一个GUID。当然最常见的情况还是一个驱动模块对应一个GUID。
 
@@ -526,7 +559,10 @@ WPP要求每个驱动模块为它的每个Control GUID和对应的Trace Flags定
 `        )`  
 第一个参数是Control GUID的名字，这个名字在定义.ctl文件时会用上；第二个参数是形如(aaaaaaaa, bbbb, cccc, dddd, eeeeeeeeeeee)表示的GUID字符串值；剩下的就是最少1个，最多32个用另一个宏`WPP_DEFINE_BIT`定义的跟踪标志。
 
+<a name="2.5.2.2" id="2.5.2.2"></a>
 ##### 2.5.2.2. 包含TMH文件
+[返回总目录](#contents)  
+
 WPP还定义个一个概念，就是TMH，它是Trace Message Header的简称，翻译过来就是跟踪消息头文件。这个文件不是由我们提供，而是由WPP在预编译过程中自己产生的，WPP对每一个源文件产生一个同名的TMH文件并放在编译目标生成目录文件夹下。
 我们唯一要做的事情就是在为每个源文件都写一行语句来包含同名的TMH文件，譬如 \osrusbfx2\kmdf\sys\step5\step5.c
 `#include "step5.tmh"`
@@ -534,7 +570,10 @@ WPP还定义个一个概念，就是TMH，它是Trace Message Header的简称，
 
 要注意的是调用包含这个TMH文件的位置必须是要在WPP_CONTROL_GUIDS宏定义之后，并在其他所有WPP宏调用之前，其他所有WPP宏调用也就是后面2.5.2.4要说的那些WPP宏调用。只有这样WPP在做预编译时才会扫描整个源文件，并为每处调用日志打印的地方生成一个插入了Control ID和跟踪标志的替代宏并存储在TMH文件中。接下来编译器在编译源文件时只要看到源文件包含了对应的TMH文件就会施展不为人知的魔法，为我们创建满足ETW日志要求的函数调用了。
 
+<a name="2.5.2.3" id="2.5.2.3"></a>
 ##### 2.5.2.3. 在工程中添加对WPP的调用
+[返回总目录](#contents) 
+
 我们前面说过之所以称WPP为预处理器，主要是因为WPP本身的确是一套集成在Windows驱动开发包里的预处理软件工具。我们必须要在自己的工程项目中显示地调用这个工具它才会工作。WPP会对我们的每个源文件都进行预处理，插入与系统日志相关的代码并参与编译。
 以Step5为例，打开\osrusbfx2\kmdf\sys\step5目录下的sources文件，我们会看到和前面四个Step1~Step2不同的新代码如下：  
 `RUN_WPP= $(SOURCES)                                \`  
@@ -551,7 +590,10 @@ WPP还定义个一个概念，就是TMH，它是Trace Message Header的简称，
 
 更详细的预处理器的语法可以参考[WPP Preprocessor]
 
+<a name="2.5.2.4" id="2.5.2.4"></a>
 ##### 2.5.2.4. WPP的初始化和清除
+[返回总目录](#contents) 
+
 除了以上的操作，WPP还需要我们在驱动代码中显式地对WPP进行初始化和清除。
 初始化调用的WPP宏为`WPP_INIT_TRACING`。WPP要求我们在驱动加载的最初阶段就调用WPP的初始化。并且保证在调用初始化之前不要进行日志打印。所以我们要在驱动的入口点函数DriverEntry的最前面对WPP进行初始化。
 `NTSTATUS DriverEntry ( ... )`  
@@ -694,7 +736,10 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 
 其次，电源策略所有者还具有两个主要职责：控制设备进入低功耗状态的功能（在设备空闲并且系统保持其工作 (S0) 状态时），以及控制设备生成唤醒信号的功能（当设备在低功耗状态中检测到外部事件时）。如果设备有空闲或唤醒功能，则功能驱动程序可以提供额外的回调函数。
 
+<a name="3.2.3.1" id="3.2.3.1"></a>
 #### 3.2.3.1 电源状态Power States
+[返回总目录](#contents) 
+
 在描述电源策略所有者的主要职责之前，首先来重点回顾一下“电源状态”的概念。简而言之，电源状态是指系统或者设备的耗电量水平的度量。  
 
 系统电源状态以S开头，从S0到Sx （x为1,2,3,4,5）,S0代表系统正常工作时的电源状态，而S1到S4表示的是系统的可睡眠电源状态（[System Sleeping States]），耗电量从1到4依次递减，S5代表关机(off)。需要注意的是S5和其他的Sx（S1，S2，S3，S4）还是有区别的，S5表示系统完全断电，而在S1和S4下虽然系统已经停止了计算并进入睡眠但电脑设备还上着电，随时可以不用重启操作系统而恢复到工作状态。
@@ -704,11 +749,14 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 
 对设备来说可以从D0直接迁移为任何Dx状态，也可以从Dx直接迁移为D0，但不可以在Dx之间直接迁移状态，简单来说，如果要从D1迁移到D3，则设备首先要从D1迁移到D0，也就是上电进入正常工作模式，然后再从D0迁移到D3。。原因很简单：在休眠甚至断电状态下访问、改变硬件配置是被禁止的，必须先回到工作状态D0方可。
 
+<a name="3.2.3.2" id="3.2.3.2"></a>
 #### 3.2.3.2 设备电源能力
+[返回总目录](#contents) 
 
-所谓设备的电源能力主要我们可以直接参考[WDF_DEVICE_POWER_CAPABILITIES]来加深我们的理解。
+所谓设备的电源能力主要我们可以直接参考`WDF_DEVICE_POWER_CAPABILITIES`来加深我们的理解。讲解的同时将该数据结构分成七大项：  
+
 `typedef struct _WDF_DEVICE_POWER_CAPABILITIES {`  
-`  ULONG              Size;`  
+`  ULONG              Size;`  //数据结构的Size  
 
 //第一项：除了D0和D3外设备是否还支持D1和D2  
 `  WDF_TRI_STATE      DeviceD1;`  
@@ -724,7 +772,8 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 //第三项：针对每个S状态（从0到5），设备可以支持的最高电源状态D值，如果系统对某个S状态不支持，则该S对应的D值取为“未指定的”（PowerDeviceUnspecified）。
 `  DEVICE_POWER_STATE DeviceState[PowerSystemMaximum];`  
 
-//以下第四项和第五项都是有关设备唤醒系统的能力配置  
+//*以下第四项和第五项都是有关设备唤醒系统的能力配置*  
+
 //第四项:设备侧最低的可以发送唤醒系统信号的电源状态。例如，如果这个值是D1，则设备在D0和D1状态下都可以发送信号将系统从休眠中唤醒，而设备如果是D2和D3则不行。
 `  DEVICE_POWER_STATE DeviceWake;`  
 
@@ -736,59 +785,101 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 `  ULONG              D2Latency;`  
 `  ULONG              D3Latency;`  
 
-//第七项：当系统进入睡眠状态（[System Sleeping States]）后，连接的设备应该对应地进入的低功耗状态（[Device Low-Power States]）。默认为D3，可以被设置为D1或者D2，但不可以为D0。也就是说系统都进入睡眠状态后设备必须也进入低功耗状态。  
+//第七项：当系统进入睡眠状态（[System Sleeping States]）后，连接的设备在没有使能远程唤醒系统条件下应该对应地进入的低功耗状态（[Device Low-Power States]）。默认为D3，可以被设置为D1或者D2，但不可以为D0。也就是说系统都进入睡眠状态后设备必须也进入低功耗状态。  
 `  DEVICE_POWER_STATE IdealDxStateForSx;`  
+
 `} WDF_DEVICE_POWER_CAPABILITIES, *PWDF_DEVICE_POWER_CAPABILITIES;`  
 
-驱动需要将设备的电源能力通过FrameWork报告给系统。设备栈的每一级驱动都可以通过调用WdfDeviceSetPowerCapabilities设置电源能力。对于OSRUSBFX2来说其并没有专门设置OSRFX2的电源能力，所以系统直接使用了USB总线驱动设置的电源能力来控制该设备。WDF并没有提供专门的读取PowerCapability的API，但我们总是可以自己构造IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES来读取，可惜我目前还没有试过，但我们可以通过Windows在设备管理器里对设备提供一些接口来得到部分信息，同时我们还可以做一个小实验并看一下驱动的日志来验证一下。先介绍一下这个小实验。日志见下图：  
-![state-transfer](./images/state-transfer.PNG)  
+设备的电源能力值一般是由总线驱动或者ACPI过滤驱动根据父设备节点的能力设定的，特别地像对OSRFX2这种USB设备，这种能力值由挂接该设备的USB的RootHub决定。一般情况下作为功能设备驱动没有必要去修改这些值，如果的确需要可以通过调用WdfDeviceSetPowerCapabilities设置电源能力，而且设置的能力值也不能超过下层驱动设置的能力值。譬如拿DeviceState为例，举个例子来说，如果总线将DeviceState[PowerSystemSleeping1]映射为PowerDeviceD2，则功能驱动可以通过调用WdfDeviceSetPowerCapabilities将该值修改为PowerDeviceD3，但不可以修改为PowerDeviceD1。
+
+WDF并没有提供专门的读取PowerCapability的API，但我们总是可以自己构造`IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES`来读取，可惜我目前还没有试过，但我们可以通过Windows在设备管理器里对用户提供一些GUI接口来得到部分信息，同时我们还可以做些小实验并看一下驱动的日志来验证一下。
+
+先来介绍一下我们的小实验。实验有两个，是在两台不同的电脑主机上做的，第一个是在主机A上做的，注意到其主机待机电源状态为S1，对应的设备最高电源状态为D3。日志见下图：  
+![state-transfer](./images/state-transfer-hostA.PNG)  
 我们可以看到日志主要分以下六个阶段：  
 
 - Step1：Sequence#  1~14，设备上电一直到进入工作状态D0。  
 - Step2：Sequence# 15~16，设备空闲，进入低功耗状态D2。  
 - Step3：Sequence# 17~18，按OSRFX2（CY001）上的“Wakeup”按钮，设备被唤醒恢复工作状态D0。  
 - Step4：Sequence# 19~20，设备空闲，又进入低功耗状态D2。  
-- Step5：Sequence# 21~24，主机空闲进入待机状态，设备也被迫进入低功耗状态D3，注意设备的Power状态要恢复D0，然后再进入D3。此时按OSRFX2（CY001）上的“Wakeup”按钮无法将设备唤醒，也无法将系统唤醒。  
+- Step5：Sequence# 21~24，主机空闲进入待机（Standby）状态，设备也被迫进入低功耗状态D3，注意设备的Power状态要恢复D0，然后再进入D3。此时按OSRFX2（CY001）上的“Wakeup”按钮无法将设备唤醒，LED数字显示仍然为“S”，也无法将系统唤醒。  
 - Step6：Sequence# 25~26，此时晃动鼠标，主机被唤醒，设备也被唤醒，进入工作状态D0。  
 - Step7：Sequence# 27~28，设备空闲，又进入低功耗状态D2。  
 - Step8：Sequence# 29~33，将设备从主机拔除，设备先恢复进入D0，再进入D3Final。
 
-然后我们来看一下OSRUSBFX2的电源能力，结合前面介绍的`WDF_DEVICE_POWER_CAPABILITIES`数据结构中的七大项，应该满足如下：
+第二个实验是在主机B上做的，注意到其主机待机电源状态为S1，对应的设备最高电源状态为D2。日志见下图：  
+![state-transfer](./images/state-transfer-hostB-Wakeup.PNG)  
 
-- 第一项：可以通过设备管理器，找到设备后右键点击“属性”，在弹出的属性页中选择“详细信息”后在下拉列表中可以找到“电容量”项（:-)天知道MS怎么会这么翻译，看看英文版的WindowsXP，明明是“Power Capabilities”）。  
+- Step1：Sequence#  1~ 4，按设备板子的”WAKEUP“按钮，设备从节电模式D2返回D0，过10秒钟后总线空闲又自动进入节点睡眠模式D2。  
+- Step2：Sequence#  5~ 8，主机空闲进入待机（Standby）状态，设备也被迫进入低功耗状态D2，注意设备的Power状态要恢复D0，然后再进入D2。  
+- Step3：Sequence#  9~12，按OSRFX2（CY001）上的“Wakeup”按钮，设备被唤醒恢复工作状态D0。同时主机也被远程唤醒。过10秒钟后总线空闲设备又自动进入节点睡眠模式D2。  
+
+现在来看一下OSRUSBFX2的电源能力，结合前面介绍的`WDF_DEVICE_POWER_CAPABILITIES`数据结构中的七大项，应该满足如下：
+
+- 第一项，设备支持的D值范围：可以通过设备管理器，找到设备后右键点击“属性”，在弹出的属性页中选择“详细信息”后在下拉列表中可以找到“电容量”项（:-)天知道MS怎么会这么翻译，看看英文版的WindowsXP，明明是“Power Capabilities”）。  
 ![power-capabilities](./images/power-capabilities.PNG)  
-可见除了D0和D3外，还支持D1和D2。从我们的测试的Step2可以看到设备会进入D2，但如何进入D1还不是很清楚。  
+可见除了D0和D3外，还支持D1和D2。从我们的实验中可以看到设备空闲节电后会进入D2，但如何进入D1还不是很清楚。该值在主机A和主机B上是一致的。  
 *注：在Windows7上所有和电源能力相关的都被移到了“电源数据”一项。*  
-- 第二项：同第一项，见上图，说明设备进入休眠后，在D0，D1和D2下都可以唤醒，但无法从D3下被唤醒。从Step3和Step5可以验证设备在D2下可以被唤醒，但在D3下不行。
-- 第三项：也就是电源状态映射表，我们可以通过设备管理器，找到设备后右键点击“属性”，在弹出的属性页中选择“详细信息”后在下拉列表中可以找到“电源状态映射”项，如下图：  
-![powerstate-mapping](./images/powerstate-mapping.PNG)  
-从上图可以看出，S0状态映射到设备的D0状态——S0映射到所有设备的D0状态；其他的系统状态都映射到D3。这表明当系统进入S0工作状态的时候，有能力为OSRFX2提供最大电源供应（D0）；当系统离开S0状态（S1到S5）时，设备从系统获取到的电源只够其维持在D3状态。  
-对第三项-电源状态映射表有两点需要注意：  
-    1. 该表的值一般是由总线驱动或者ACPI过滤驱动根据父设备节点的能力设定的，特别地像对OSRFX2这种USB设备，这种能力值由挂接该设备的USB的RootHub决定。下表是在另一台PC上读到的值，注意到这台电脑的DeviceState[PowerSystemSleeping1]的值和前面一台电脑上读到的就不同。  
-    ![powerstate-mapping](./images/powerstate-mapping2.PNG)  
-    2. 作为OSRFX2的功能驱动程序，在设备栈里位置在Hub的上面，一般不需要去修改该能力值，如果真要修改，也只能把值往小里改。举个例子来说，如果DeviceState[PowerSystemSleeping1]映射为PowerDeviceD2，则功能驱动可以通过调用WdfDeviceSetPowerCapabilities将该值修改为PowerDeviceD3，但不可以修改为PowerDeviceD1。  
-- 第四项不清楚，需要用IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES实际读一下。但可以根据第三项和驱动日志猜测，因为系统睡眠后设备都对应的是D3，而我们知道从日志的Step5可以发现D3并无法唤醒系统，所以这个DeviceWake还真不知道是什么。  
-- 第五和六不清楚，需要用IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES实际读一下。  
-- 第七项，从Step5可以知道系统进入睡眠后，连接的设备进入的应该是D3。
 
-#### 3.2.3.3 空闲省电和远程唤醒
+- 第二项，设备进入休眠状态后，可被唤醒的D值范围：同第一项，见上图，说明设备进入休眠后，在D0，D1和D2下都可以唤醒，但无法从D3下被唤醒。从实验一的Step3和Step5可以验证设备在D2下可以被唤醒，但在D3下不行。该值在主机A和主机B上是一致的。  
+
+- 第三项，电源状态映射表：我们可以通过设备管理器，找到设备后右键点击“属性”，在弹出的属性页中选择“详细信息”后在下拉列表中可以找到“电源状态映射”项。在主机A上如下图所示：  
+    ![powerstate-mapping](./images/powerstate-mapping-hostA.PNG)  
+可见对主机A，S0状态映射到设备的D0状态——S0映射到所有设备的D0状态；其他的系统状态都映射到D3。这表明当系统进入S0工作状态的时候，有能力为OSRFX2提供最大电源供应（D0）；当系统离开S0状态（S1到S5）时，设备从系统获取到的电源只够其维持在D3状态。我们说过对OSRFX2这种USB设备，电源能力值是由挂接该设备的USB的RootHub决定，所以换一台不同型号的电脑取值就有可能不同。下表是主机B上读到的值，注意到这台电脑的DeviceState[PowerSystemSleeping1]的值和前面一台电脑上读到的就不同-用红色方框标出。这些不同导致了同样的设备在睡眠和唤醒时的行为发生差异。主机A的Step5里设备就无法进行远程唤醒而同样的设备在主机B上就可以。   
+    ![powerstate-mapping](./images/powerstate-mapping-hostB.PNG)  
+
+- 第四项，设备侧最低的可以发送唤醒系统信号的电源状态值：没有GUI信息，需要用`IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES`实际读一下。感觉这个值会随不同主机的总线能力不同而不同。譬如对主机A，该值必定在D3以上，因为实验一的Step5里，设备随主机睡眠后进入D3，我们按压板子的"WAKEUP"按钮无法使LED数字显示从“S”变为“A”，说明OSRFX2的固件代码中TD_Resume函数没有被调用到，唯一的原因是此时主机侧总线驱动下发了请求将设备的RemoteWakeup的功能给关闭了。而对于主机B，该值应该至少是D2，因为从实验二的Step3我们可以看到可以由设备发起RemoteWakeup。
+
+- 第五项，系统侧可以接受设备唤醒信号并苏醒的最低的电源状态：没有GUI信息，需要用`IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES`实际读一下。  
+
+- 第六项，设备从低功耗睡眠状态D1~D3恢复为正常工作状态D0的大致时长：没有GUI信息，需要用`IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES`实际读一下。  
+
+- 第七项，当系统进入睡眠状态后，连接的设备在没有使能远程唤醒系统条件下应该对应地进入的低功耗状态。这个值有点绕，而且我目前还不清楚具体用来做什么，有待研究。没有GUI信息，需要用`IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES`实际读一下。感觉这个值会随不同主机的总线能力不同而不同。
+
+<a name="3.2.3.3" id="3.2.3.3"></a>
+#### 3.2.3.3 空闲节电和远程唤醒
+[返回总目录](#contents) 
+
 电源策略所有者还具有两个重要的职责：控制设备进入空闲节电的功能，以及控制设备生成唤醒信号的功能。
 
 首先对这两个功能介绍一下定义，概念定义很重要。
 
- - **空闲节电功能**：所谓空闲节电功能是指一些设备可在系统保持其工作状态S0时进入睡眠（低功耗）状态。对于此类设备，如果设备在预定（可设置）时间内一直处于空闲（未使用）状态，则FrameWork将使设备进入低功耗状态以节省耗电和减少发热对设备的影响。
+ - **空闲节电功能**：所谓空闲节电功能是指一些设备可在系统保持其工作状态S0时进入睡眠（低功耗）状态。USB协议上的术语叫Suspend，原理上说就是系统侧（集线器驱动程序）会一直监测USB总线上连接的某个USB设备是否处于空闲态，即查看有没有从主机侧发送给设备的I/O请求，或者设备有没有向主机侧上报中断事件，超过一定时长后如果该设备一直空闲，主机系统认定设备已空闲后就会在总线上给这个设备发出一个信号，设备侧的USB处理芯片会监测这个信号，一旦发现就会产生一个SUSPEND中断，此时设备侧的固件就会将CPU挂起进入低功耗状态节省耗电和减少发热对设备的影响。所以我们也可以说这种挂机是有主机侧决定的，设备侧只是需要配合主机侧提供挂起的能力罢了。如果集线器驱动程序可以挂起个别端口而不影响集线器上其他端口，那我们称这种能力叫**USB选择性挂起功能**（USB Selective Suspend）。有兴趣的同学可以阅读以下设备侧的技术手册，对于OSRFX2(CY001)，就是EZ-USB_TRM.pdf的6.2章，同时看一下我提供的OSRFX2的固件代码的fw.c。摘录一小段关键代码以供快速参考。  
+`void main(void){`  
+`   ...`  
+`   while(TRUE){               // Main Loop`    
+`   ...`  
+      // Sleep变量在设备响应前文所述的SUSPEND中断时被固件代码置为TRUE  
+`     if (Sleep) {`  
+`         if(TD_Suspend()) {` //略过不表  
+`         ...`  
+          //以下是进入低功耗休眠的代码循环。退出低功耗的条件有两个:  
+          // 1) “WAKEUP”按钮被按下，并且，主机允许远程唤醒功能（Remote-Wakeup），即Rwuen为TRUE。主机会向设备发送Setup指令指示设备使能还是禁止Remote-Wakeup的功能，有关远程唤醒功能的介绍要见下文。  
+          // 2) USB总线上有信号，特别地主机开始向设备发送控制请求都会将设备唤醒。
+`           do {`  
+`              EZUSB_Susp();` // 挂起CPU并阻塞，直到USB总线上有传输信号或者我们按下板子上的"WAKEUP"按钮才返回。  
+`           } while(!Rwuen && EZUSB_EXTWAKEUP());`  
+`           EZUSB_Resume();` //该函数在我们按下“WAKEUP”按钮时会向主机侧发送信号通知主机我醒来了，也即实现设备侧的远程唤醒功能  
+`           ...`  
+`         }`
+`      }`  
+`...`  
+`}`  
 
- - **远程唤醒功能**：USB的定义叫Remote Wakeup（但注意远程唤醒不仅仅局限在USB设备上）。是指有些设备可以将自己，也可以将主机系统，从低功耗的睡眠状态（Dx或者Sx）唤醒为正常工作状态（D0或者S0）。根据发生唤醒时主机设备的电源状态不同，可以将唤醒分成如下三类：
-    - **S0唤醒**：系统处于S0状态，设备处于空闲节电睡眠状态，此时如果在设备上发生外部刺激导致设备触发了唤醒信号，则在FrameWork和驱动的共同作用下设备被设置返回工作状态。在OSRFX2（CY001）上的外部刺激包括两种情况，一种是我们按压设备侧板子上的“WAKEUP”按钮。还有一种就是当设备进入睡眠状态后（LED数字显示为“S”），主机系统侧向设备发起命令请求，激活了USB总线，这两种刺激都会将设备唤醒。另外还要注意的是S0唤醒实际上只会唤醒设备，而系统主机因为一直处于S0状态，所以谈不上唤醒不唤醒。
-    - **Sx唤醒**：系统处于Sx状态，x为1，2，3或者4。此时如果在设备上发生外部刺激导致设备触发了唤醒信号，则在FrameWork和驱动的共同作用下设备被设置返回工作状态。注意对Sx唤醒设备并不一定是在低功耗状态，但大部分情况下系统进入Sx后设备也会被置于低功耗状态。而且针对Sx唤醒，我们所说的远程唤醒的刺激源一般都是来自设备端。
+ - **远程唤醒功能**：USB的定义叫Remote Wakeup。是指有些设备在外部输入下可以将自己，也可以将主机系统，从低功耗的睡眠状态（Dx或者Sx）唤醒为正常工作状态（D0或者S0）。  
+   
+     对于设备侧来说，只要芯片电路具备自我检测的功能就可以支持该功能，譬如我们知道对于OSRFX2（CY001）使用的USB芯片FX2PL来讲，它自身可以检测USB总线上是否有来自主机的请求输入，还有WAKEUP针脚电路的触发都可以导致CPU从低功耗中醒来。但有一点要注意我们这里说的USB总线信号的输入-即来自主机的I/O请求会无条件将设备唤醒，不属于USB定义的远程唤醒的范畴。所以在OSRFX2上的远程唤醒功能指的只是在按压“WAKEUP”按钮后设备是否会苏醒以及如果主机也睡眠后能否被唤醒的功能。
+
+     还有一点需要注意的是USB规范里定义的远程唤醒功能也是受主机侧控制的，只有主机打开了该功能，设备侧在检测到外部输入时才能推出休眠状态并向主机发送请求通知主机从睡眠中醒来。这一点我们在3.2.3.2章节的实验一的Step5中应该也说到了，为何此时按“WAKEUP”按钮设备不会自己苏醒，更不会触发主机苏醒。
+
+     根据发生唤醒时主机设备的电源状态不同，可以将远程唤醒分成如下三类：
+     - **S0唤醒**：系统处于S0状态，设备处于空闲节电睡眠状态，此时如果在设备上发生外部刺激导致设备触发了唤醒信号，则在FrameWork和驱动的共同作用下设备被设置返回工作状态。在OSRFX2（CY001）上的外部刺激就是我们按压设备侧板子上的“WAKEUP”按钮。另外还要注意的是S0唤醒实际上只会唤醒设备，而系统主机因为一直处于S0状态，所以谈不上唤醒不唤醒。
+     - **Sx唤醒**：系统处于Sx状态，x为1，2，3或者4。此时如果在设备上发生外部刺激导致设备触发了唤醒信号，则在FrameWork和驱动的共同作用下设备和主机都返回工作状态。注意对Sx唤醒设备并不一定是在低功耗状态，但大部分情况下系统进入Sx后设备也会被置于低功耗状态。而且针对Sx唤醒，我们所说的远程唤醒的刺激源一般都是来自设备端。
     - **S5唤醒**：系统处于S5(off)状态，此时如果在设备上发生外部刺激导致设备触发了唤醒信号，会将主机系统唤醒返回开机工作状态。对这种唤醒我们这里不多讨论，因为为了支持这种功能，需要主机的BIOS支持并在BIOS中予以支持，这超出了操作系统的支持范围。
 
-    综上所述，在OSRFX2上我们常说的**唤醒**都是指**S0换醒**或者**Sx唤醒**。
+    综上所述可见，我们平时常说的**远程唤醒**应该都是指**Sx唤醒**。
 
-
-介绍完代码修改可以演示一下小实验
-
-介绍完基本概念，还有一点需要强调的是，针对USB设备，设备进入空闲节电或者被唤醒都是一种被动的操作。换句话说都是主机侧的FrameWork和驱动发起USB的请求将设备设置进入空闲或者唤醒，这也就解释了如果系统没有指示设备苏醒，我们怎么按板子上的“WAKEUP”按钮也是没有用的。（应该是设备支持的无法从D3下被唤醒,而对第一台电脑，由于S1对应D3,所以主机standby后设备进入D3就无法唤醒了，虽然进了D3，LED还是亮的，因为设备并没有停止供电啊）
+讲到这里，其实重要的内容都讲完了，要说OSRUSBFX2里的代码，其实倒变成次要的了。因为代码比较简单，大家可以直接参考DDMWDF的“Chapter 7: Plug and Play and Power Management”的“Advanced Power Management for KMDF Drivers”部分，它也是对照OSRUSBFX2的例子来讲的。还是那句话，如果大家真心想看中文翻译可以告诉我，我再找时间补上。
 
 
 
@@ -855,27 +946,20 @@ WdfUsbTargetDeviceRetrieveInformation 获取设备属性
 # 参考文献：  
 [返回总目录](#contents)  
 
+MSDN/Windows Driver Development: http://msdn.microsoft.com/en-us/library/ff557573(v=vs.85).aspx
+DDMWDF: [Developing Drivers with the Microsoft Windows Driver Foundation](http://flylib.com/books/en/3.141.1.1/1/)  
+EZ-USB Manual Technical Reference： \Cypress\USB\doc\FX2LP\EZ-USB_TRM.pdf  
+USB技术及应用设计/肖踞雄,翁铁成,宋中庆 编著.-北京：清华大学出版社，2003  
 http://www.ituring.com.cn/article/554  
 http://channel9.msdn.com/Shows/Going+Deep/Doron-Holan-Kernel-Mode-Driver-Framework  
-DDMWDF: [Developing Drivers with the Microsoft Windows Driver Foundation](http://flylib.com/books/en/3.141.1.1/1/)  
 
 
 
-http://msdn.microsoft.com/zh-cn/library/ff544385(v=vs.85).aspx
-
-[DDMWDF翻译]: http://my.csdn.net/cyx1231st
-[Synchronous and Asynchronous I/O]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365683(v=vs.85).aspx
-[I/O Completion Ports]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365198(v=vs.85).aspx
-
-[CreateFile]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa363858(v=vs.85).aspx
-[ReadFile]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365467(v=vs.85).aspx
-
-[CreateIoCompletionPort]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa363862(v=vs.85).aspx
-[GetQueuedCompletionStatus]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa364986(v=vs.85).aspx
 
 [有关异步读写、通信]:http://hi.baidu.com/linglux/item/39617e3fb672434b033edc3b
 [I/O Completion Port(I/O完成对象)的原理与实现]: http://blog.csdn.net/fengxinze/article/details/7027352
-
+[Synchronous and Asynchronous I/O]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365683(v=vs.85).aspx
+[I/O Completion Ports]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365198(v=vs.85).aspx
 [Device Low-Power States]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff543186(v=vs.85).aspx#D3
 [System Sleeping States]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff564575(v=vs.85).aspx
 [Device Power States]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff543162(v=vs.85).aspx
@@ -904,6 +988,10 @@ http://msdn.microsoft.com/zh-cn/library/ff544385(v=vs.85).aspx
 [Creating I/O Queues]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff540783(v=vs.85).aspx
 [Using Power-Managed I/O Queues]: http://msdn.microsoft.com/en-us/library/ff545505(v=vs.85).aspx
 
+[CreateFile]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa363858(v=vs.85).aspx
+[ReadFile]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa365467(v=vs.85).aspx
+[CreateIoCompletionPort]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa363862(v=vs.85).aspx
+[GetQueuedCompletionStatus]: http://msdn.microsoft.com/en-us/library/windows/desktop/aa364986(v=vs.85).aspx
 [SetupDiGetClassDevs]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551069(v=vs.85).aspx
 [SetupDiEnumDeviceInterfaces]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551015(v=vs.85).aspx
 [SetupDiGetDeviceInterfaceDetail]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551120(v=vs.85).aspx
@@ -926,9 +1014,6 @@ http://msdn.microsoft.com/zh-cn/library/ff544385(v=vs.85).aspx
 [WdfRequestCompleteWithInformation]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff549948(v=vs.85).aspx
 [WdfRequestSend]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff550027(v=vs.85).aspx
 [WdfUsbTargetPipeGetIoTarget]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff551146(v=vs.85).aspx
-
-
-
 [DriverEntry]: http://msdn.microsoft.com/zh-cn/library/windows/hardware/ff544113(v=vs.85).aspx
 [EvtDriverDeviceAdd]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff541693(v=vs.85).aspx
 [EvtDevicePrepareHardware]: http://msdn.microsoft.com/en-us/library/windows/hardware/ff540880(v=vs.85).aspx
