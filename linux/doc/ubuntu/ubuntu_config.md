@@ -65,3 +65,20 @@ sudo apt-get install retext
 
 13) Install IDLE for Python:  
 sudo apt-get install idle
+
+14) install git 
+To support git work with github, we should upgrade git to 1.7.10 and upper, refer to https://help.github.com/articles/https-cloning-errors
+refer this: http://ubuntuforums.org/showthread.php?t=2061057 to upgrade ur git
+
+15) when you met some issue in apt-get
+*) "E: Dynamic MMap out of room!"
+http://www.linuxquestions.org/questions/debian-26/dynamic-mmap-out-of-room-160966/
+open /etc/apt/apt.conf.d/70debconf
+added one line:
+APT::Cache-Limit "55000000000"; 
+
+*) "The following packages have unmet dependencies"
+http://askubuntu.com/questions/261600/the-following-packages-have-unmet-dependencies
+dpkg --purge --force-depends
+git apt-get clean
+
