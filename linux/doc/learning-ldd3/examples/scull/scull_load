@@ -16,7 +16,7 @@ fi
 /sbin/insmod ./$module.ko $* || exit 1
 
 # retrieve major number
-major=$(awk "\\$2==\"$module\" {print \\$1}" /proc/devices)
+major=$(awk "\$2==\"$module\" {print \$1}" /proc/devices)
 
 # Remove stale nodes and replace them, then give gid and perms
 # Usually the script is shorter, it's scull that has several devices in it.
