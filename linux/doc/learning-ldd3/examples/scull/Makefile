@@ -32,7 +32,7 @@ endif
 
 
 clean:
-	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions
+	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions *.order *.symvers
 
 depend .depend dep:
 	$(CC) $(CFLAGS) -M *.c > .depend

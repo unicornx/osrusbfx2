@@ -44,7 +44,7 @@
 #define SCULL_MAJOR 0   /* dynamic major by default */
 #endif
 
-#ifndef SCULL_NR_DEVS
+#ifndef SCULL_NR_DEVS  // NR stands for "NumbeR"
 #define SCULL_NR_DEVS 4    /* scull0 through scull3 */
 #endif
 
