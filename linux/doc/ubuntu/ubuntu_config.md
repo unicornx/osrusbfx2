@@ -1,3 +1,6 @@
+Gnome快捷键
+http://wiki.ubuntu.org.cn/Gnome%E5%BF%AB%E6%8D%B7%E9%94%AE
+
 1) Install chinexe input:  
 system->administration->language Suppoort
 system->preferences->IBUS perference->launch IBUS

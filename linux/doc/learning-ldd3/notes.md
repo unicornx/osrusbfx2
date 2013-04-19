@@ -1,5 +1,12 @@
 学习笔记 ldd3
 
+LDD3 on line doc @ http://lwn.net/Kernel/LDD3/
+
+
+http://www.codeproject.com/Articles/112474/A-Simple-Driver-for-Linux-OS
+
+https://www.kernel.org/doc/htmldocs/writing_usb_driver.html
+
 #Chapter2:#
 按照书上的例子hello的说法会在终端显示“Hello, world”。但是运行后什么都没有出现 （原因不解）。
 
@@ -121,9 +128,41 @@ echo 8 > /proc/sys/kernel/printk
 ##通过监视调试##
 strace命令的使用，它可以显示由用户空间程序发出的所有系统调用。不仅显示调用，还能显示调用参数以及用符号形式表示的返回值。
 
+#Chapter11 内核的数据类型#
+使用-Wall -Wstrict-prototypes选项编译可以防止大多数的和数据类型有关的代码缺陷。
+
+内核使用的数据类型主要有三大类：
+- 类似int这样的标准C语言类型   - C语言标准类型
+- 类似u32这样的有确定大小的类型 - 内核标准类型
+- 像pid_t这样的内核对象类型    - 内核数据结构
+
+对于注意对于C语言标准类型，在不同的体系架构上，其所占空间的大小并不相同。所以要慎用C语言标准类型。如果你明确某个数据需要使用指定字节长度，则需要改用类似u32这样的确定大小的内核标准类型,因为内核标准类型已经根据不同的体系架构做了适配。具体可以参考include/linux/types.h，而该文件又包含了<asm/types.h>，这么写是为了在编译时根据不同的arch选择不同arch目录下对应的type.h。
+
+使用标准C语言类型有一个典型的例子，就是内核中通常的内存地址常常是 unsigned long, 利用了如下事实：至少在 Linux 目前支持的所有平台上,指针和长整型的大小总是相同的。
+
+移植性问题:
+- 时间间隔
+- 页大小
+- 字节序
+- 数据对齐
+- 指针和错误值
+
+
+文件系统对设备的表达一直没有搞清楚。
+
+32位总线
+pci0000:00/0000:00:1d.7
+   |    |  |    |  |  |_功能(3bit)
+           |    |  |__设备(5bit)
+           |    |_总线（8位）
+           |_PCI域(16bit)
+l
 
 
 
+
+
+   
 
 
 
