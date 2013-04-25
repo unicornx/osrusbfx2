@@ -128,6 +128,8 @@ echo 8 > /proc/sys/kernel/printk
 ##通过监视调试##
 strace命令的使用，它可以显示由用户空间程序发出的所有系统调用。不仅显示调用，还能显示调用参数以及用符号形式表示的返回值。
 
+#Chapter8 need read more
+
 #Chapter11 内核的数据类型#
 使用-Wall -Wstrict-prototypes选项编译可以防止大多数的和数据类型有关的代码缺陷。
 
@@ -151,18 +153,139 @@ strace命令的使用，它可以显示由用户空间程序发出的所有系�
 文件系统对设备的表达一直没有搞清楚。
 
 32位总线
-pci0000:00/0000:00:1d.7
-   |    |  |    |  |  |_功能(3bit)
-           |    |  |__设备(5bit)
-           |    |_总线（8位）
-           |_PCI域(16bit)
-l
+`pci0000:00/0000:00:1d.7` 
+`          |    |  |    |  |  |_功能(3bit)`         
+`          |    |  |__设备(5bit)`  
+`          |    |_总线（8位）`  
+`          |_PCI域(16bit)`
+
+
+#Chapter13 USB drivers
+/include/linux/usb/Ch9.h, in which define all usb2 basic types
+
+
+USB设备的表达式格式：
+root_hub-hub_port:config.interface
+root_hub： 1 起序
+hub_port： 1 起序
+config： 1 起序
+interface： 0 起序
+sysfs例子：
+/sys/devices/pci0000:00/0000:00:09.0/usb2/2-1
+|-- 2-1:1.0
+| |-- bAlternateSetting
+| |-- bInterfaceClass
+| |-- bInterfaceNumber
+| |-- bInterfaceProtocol
+| |-- bInterfaceSubClass
+| |-- bNumEndpoints
+| |-- detach_state
+| |-- iInterface
+| `-- power
+| `-- state
+|-- bConfigurationValue
+|-- bDeviceClass
+|-- bDeviceProtocol
+|-- bDeviceSubClass
+|-- bMaxPower
+|-- bNumConfigurations
+|-- bNumInterfaces
+|-- bcdDevice
+|-- bmAttributes
+|-- detach_state
+|-- devnum
+|-- idProduct
+|-- idVendor
+|-- maxchild
+|-- power
+| `-- state
+|-- speed
+`-- version
+
+
+usbfs does not exit since 2.6.32
+
+##USB Urbs
+The typical lifecycle of a urb is as follows:
+• Created by a USB device driver.
+• Assigned to a specific endpoint of a specific USB device.
+• Submitted to the USB core, by the USB device driver.
+• Submitted to the specific USB host controller driver for the specified device by
+the USB core.
+• Processed by the USB host controller driver that makes a USB transfer to the
+device.
+• When the urb is completed, the USB host controller driver notifies the USB
+device driver.
+
+/include/linux/usb.h
+struct urb {
+	/* private: usb core and host controller only fields in the urb */
+	struct kref kref;		/* reference count of the URB */
+	void *hcpriv;			/* private data for host controller */
+	atomic_t use_count;		/* concurrent submissions counter */
+	atomic_t reject;		/* submissions will fail */
+	int unlinked;			/* unlink error code */
+
+	/* public: documented fields in the urb that can be used by drivers */
+	struct list_head urb_list;	/* list head for use by the urb's
+					 * current owner */
+	struct list_head anchor_list;	/* the URB may be anchored */
+	struct usb_anchor *anchor;
+	struct usb_device *dev; 	/* (in) pointer to associated device */
+	struct usb_host_endpoint *ep;	/* (internal) pointer to endpoint */
+	unsigned int pipe;		/* (in) pipe information */
+	int status;			/* (return) non-ISO status */ 当URB结束或者正在被usbcore处理时返回的当前状态。主要用于Non-ISO（相对于Isochronous传输，Non-ISO指Bulk，Control或者Interrut传输）的返回状态值，对于Isochronous传输，如果该值不为0，则表示URB发生了unlink现象（所谓unlink是指当一个URB被提交给core之后而未完成之前被驱动主动撤销或者发生了设备被移除的事件）。该值驱动应该只在完成函数中访问该变量，对于Isochronous的URB返回状态值，参考iso_frame_desc成员
+	unsigned int transfer_flags;	/* (in) URB_SHORT_NOT_OK | ...*/
+	void *transfer_buffer;		/* (in) associated data buffer */
+	dma_addr_t transfer_dma;	/* (in) dma addr for transfer_buffer */
+	struct usb_sg_request *sg;	/* (in) scatter gather buffer list */
+	int num_sgs;			/* (in) number of entries in the sg list */
+	u32 transfer_buffer_length;	/* (in) data buffer length */
+	u32 actual_length;		/* (return) actual transfer length */ URB结束时实际发送或者接收的字节数
+	unsigned char *setup_packet;	/* (in) setup packet (control only) */
+	dma_addr_t setup_dma;		/* (in) dma addr for setup_packet */
+	int start_frame;		/* (modify) start frame (ISO) */
+	int number_of_packets;		/* (in) number of ISO packets */
+	int interval;			/* (modify) transfer interval
+					 * (INT/ISO) */
+	int error_count;		/* (return) number of ISO errors */
+	void *context;			/* (in) context for completion */
+	usb_complete_t complete;	/* (in) completion routine */ 完成函数，当URB被usbcore执行完成时回调
+	struct usb_iso_packet_descriptor iso_frame_desc[0];IsochronousURB状态返回值
+					/* (in) ISO ONLY */
+};
+
+##URB的创建和删除
+
+创建必需调用API： struct urb *usb_alloc_urb(int iso_packets, int mem_flags); 不可以自己静态定义，否则会破坏系统内建的引用计数跟踪机制  
+删除：void usb_free_urb(struct urb *urb);
+
+创建完URB后可以调用一系列对应的初始化函数对URB进行初始化
+Interrupt urbs： usb_fill_int_urb  
+Bulk urbs： usb_fill_bulk_urb  
+Control urbs：usb_fill_control_urb  
+Isochronous urbs： 没有现成的API，需要手工初始化  
+
+URB的提交
+创建和初始化完成后，驱动就可以将URB提交给USB core来发送给设备  
+int usb_submit_urb(struct urb *urb, int mem_flags);  
+一旦调用完成后，驱动就只能在完成函数中对URB的内存数据进行访问，提前访问URB中的数据是不对的。
+
+##完成函数
+
+##URB的撤销
+int usb_kill_urb(struct urb *urb);该函数通常在disconnect回调函数中被调用，在设备从系统上断开时用于撤销未完成的URB。  
+int usb_unlink_urb(struct urb *urb);###异步###通知Core停止一个未完成的URB   
+
+查看usb的设备和驱动可以观察以下文件系统：
+/sys/bus/usb: 
+|_/sys/bus/usb/devices:都link指向/sys/devices下的设备文件
+|_/sys/bus/usb/drivers：
 
 
 
 
-
-   
+  
 
 
 
