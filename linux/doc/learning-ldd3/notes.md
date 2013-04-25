@@ -2,10 +2,17 @@
 
 LDD3 on line doc @ http://lwn.net/Kernel/LDD3/
 
+Linux Kernel Source on line @ http://lxr.free-electrons.com/ident
+
+"Linux Device Drivers Series" tag @ http://www.linuxforu.com/tag/linux-device-drivers-series/page/2/
+
 
 http://www.codeproject.com/Articles/112474/A-Simple-Driver-for-Linux-OS
 
 https://www.kernel.org/doc/htmldocs/writing_usb_driver.html
+
+http://www.kroah.com/ - Greg Kroah-Hartman's homepage
+https://github.com/gregkh - Greg Kroah-Hartman's github
 
 #Chapter2:#
 按照书上的例子hello的说法会在终端显示“Hello, world”。但是运行后什么都没有出现 （原因不解）。
@@ -283,6 +290,138 @@ int usb_unlink_urb(struct urb *urb);###异步###通知Core停止一个未完成�
 |_/sys/bus/usb/drivers：
 
 
+#Chapter14 设备模型
+
+有关热插拔
+
+浅谈hotplug, udev, hal, d-bus: http://linux.chinaunix.net/techdoc/net/2009/06/29/1120750.shtml
+理解和使用Linux的硬件抽象层HAL http://blog.csdn.net/colorant/article/details/2611559
+Linux里udev的工作原理：http://www.ha97.com/1003.html
+Udev: Introduction to Device Management In Modern Linux System： http://www.linux.com/news/hardware/peripherals/180950-udev
+http://blog.csdn.net/fjb2080/article/details/4842814 - a serial article about udev
+有关内核加载模块: http://www.360doc.com/content/12/0628/16/1162697_220995749.shtml 
+
+
+5.App  
+↑  
+4.D-Bus  
+↑  
+3.HAL  
+↑  
+2.udev  
+↑  
+1.Kernel  
+ 
+
+##1. Kernel
+Udev depends on the sysfs file system which was introduced in the 2.5 kernel. It is sysfs which makes devices visible in user space. When a device is added or removed, kernel events are produced which will notify Udev in user space.
+
+
+##2.udev
+u 是指 user space ， dev 是指 device 
+udev文件系统是针对2.6 内核，提供一个基于用户空间的动态设备节点管理和命名的解决方案。
+
+创建Udev的目的Goals
+
+- Run in user space. 
+- Create persistent device names, take the device naming out of kernel space and implement rule based device naming.
+- Create a dynamic /dev with device nodes for devices present in the system and allocate major/minor numbers dynamically.
+- Provide a user space API to access the device information in the system.
+
+###2.1 Udevd如何获取内核的这些模块动态变化的信息
+
+设备节点的创建，是通过sysfs接口分析dev文件取得设备节点号，这个很显而易见。那么udevd是通过什么机制来得知内核里模块的变化情况，如何得知设备的插入移除情况呢？当然是通过hotplug机制了，那hotplug又是怎么实现的？或者说内核是如何通知用户空间一个事件的发生的呢？
+
+答案是通过netlink socket通讯，在内核和用户空间之间传递信息。
+
+The Udev daemon listens to the netlink socket that the kernel uses for communicating with user space applications. The kernel will send a bunch of data through the netlink socket when a device is added to, or removed from a system. The Udev daemon catches all this data and will do the rest, i.e., device node creation, module loading etc.
+Udevd通过标准的socket机制，创建socket连接来获取内核广播的uevent事件 并解析这些uevent事件。
+
+内核调用kobject_uevent函数发送netlink message给用户空间，这部分工作通常不需要驱动去自己处理，在统一设备模型里面，在子系统这一层面，已经将这部分代码处理好了，包括在设备对应的特定的Kobject创建和移除的时候都会发送相应add和remove消息，当然前提是你在内核中配置了hotplug的支持。
+
+Netlink socket作为一种内核与用户空间的通信方式，不仅仅用在hotplug机制中，同样还应用在其它很多真正和网络相关的内核子系统中。
+
+
+###2.2 Udevd如何监控规则文件的变更
+
+如果内核版本足够新的话，在规则文件发生变化的时候，udev也能够自动的重新应用这些规则，这得益于内核的inotify机制， inotify是一种文件系统的变化通知机制，如文件增加、删除等事件可以立刻让用户态得知。
+
+在udevd中，对inotify和udev的netlink socket文件描述符都进行了select的等待操作。有事件发生以后再进一步处理。
+
+###2.3 系统冷启动阶段Udevtrigger的工作机制？
+
+运行udevd以后，使用udevtrigger的时候，会把内核中已经存在的设备的节点创建出来，那么他是怎么做到这一点的？ 分析udevtrigger的代码可以看出：
+
+udevtrigger通过向/sysfs 文件系统下现有设备的uevent节点写”add”字符串，从而触发uevent事件，使得udevd能够接收到这些事件，并创建buildin的设备驱动的设备节点以及所有已经insmod的模块的设备节点。
+
+
+##3. HAL
+The HAL gets information from the Udev service, when a device is attached to the system and it creates an XML representation of that device. It then notifies the corresponding desktop application like Nautilus through the Dbus and Nautilus will open the mounted device‚Äôs files.
+它是一个位于操作系统和驱动程序之上，运行在用户空间中的服务程序。
+它的目的是对上层应用提供一个统一的简单的查询硬件设备的接口。它所谓的抽象，基本上也就仅限于这一功能，它通常并不提供对硬件的实际操作，对硬件的操作，还是由应用程序来完成。
+细化来说，除了提供标准的硬件查询接口，它甚至并不考虑如何对硬件进行配置，这不是它要完成的工作，但它确实提供了存储硬件配置相关信息的空间。下面我们会说到，那被称为属性。
+所以，简单的说，你可以把HAL理解为：一堆的硬件列表以及他们的相关属性的集合。
+
+HAL是Hardware Abstraction Layer的首字母缩写。不过Windows下的HAL和Linux下的HAL两者所指并非相同之物：
+Windows下的HAL：位于操作系统的最底层，直接操作物理硬件，隔离与硬件相关的信息，为上层的操作系统和设备驱动程序提供一个统一的接口，起到对硬件的抽象作用。有了HAL，编写驱动程序就容易多了，因为HAL的接口不但使用简单，而且具有更好的可移植性（没用过）。
+Linux 下的HAL：至于对硬件的抽象，Linux内核早就有类似机制，只不过没有专门的名称罢了。而Linux的HAL指的并非这个，它不是位于操作系统的最底层，直接操作硬件，相反，它位于操作系统和驱动程序之上，是一个运行在用户空间中的服务程序。
+
+udev创建dev下的文件结点，加载驱动程序，让设备处于可用状态。而HAL则告诉应用程序，现在有哪些设备可用，这些设备的类型、特性和能力，让应用程序知道如何使用它们。详细地讲它提供以下几项功能：
+- 获取指定类型的设备列表。
+- 获取/更改设备的属性值。
+- 获取设备具有的能力描述。
+- 设备插入/拔除时，通知相关应用程序。
+- 设备属性或能力变化时，通知相关应用程序。
+设备的属性管理是HAL最重要任务之一，有的设备属性来源于实际的硬件，有的来源于设备信息文件(/usr/share/hal/fdi/)，有的来源其它配置信息(如/usr/share/hwdata/)。设备属性的都有标准的定义，这些属性定义是HAL的SPEC的主要内容之一，可以参考http://people.freedesktop.org/~david/hal-spec/hal-spec.html
+
+###HAL是如何和udev建立联系的：
+- udev只是一个框架，它的行为完全受它的规则所控制，这些规则存放在目录/etc/udev/rules.d/中，其中90-hal.rules是用来让udev把设备插入/拔除的事件通过socket socket:/org/freedesktop/hal/udev_event转发给HAL的。
+- HAL挂在socket:/org/freedesktop/hal/udev_event上等待事件，有事件发生时就调用函数hald_udev_data处理，它先从事件中取出主要参数，创建一个hotplug_event对象，把它放入事件队列中，然后调用hotplug_event_process_queue处理事件。
+- 函数hotplug_event_begin负责具体事件的处理，它把全部事件分为四类，并分别处理hotplug_event_begin_sysfs处理普通设备事件，hotplug_event_begin_acpi处理ACPI事件，hotplug_event_begin_apm处理APM事件，hotplug_event_begin_pmu处理PMU事件。要注意的是，后三者的事件源并非源于udev，而是在device_reprobe时触发的(osspec_device_reprobe/hotplug_reprobe_tree/hotplug_reprobe_generate_add_events/acpi_generate_add_hotplug_event)。
+
+###HAL和应用程序之间的交互：
+- 函数hotplug_event_begin_sysfs中，如果是插入设备，则创建一个设备对象，设置设备的属性，调用相关callouts，然后放入设备列表中，并触发signal让dbus通知相关应用程序。如果是拔除设备，则调用相关callouts，然后从设备列表中删除，并触发signal让dbus通知相关应用程序。
+- 应用程序可以主动调用HAL提供的DBUS接口函数，这些函数在libhal.h中有定义。应用程序也可以注册HAL的signal，当设备变化时，HAL通过DBUS上报事件给应用程序。
+- callout是HAL一种扩展方式，它在设备插入/拔除时执行。可以在设备信息文件中(/usr/share/hal目录)指定。
+- addon也是HAL一种扩展方式，它与callout的不同之处在于addon往往是事件的触发者，而不是事件的消费者。HAL的事件源主要源于udev，而udev源于kernel的hotplug，然而有的设备如电源设备、磁盘设备和特殊按键等，它们并不产生hotplug事件。HAL就得不到通知，怎么办呢，addon就是用于支持新事件源的扩展方式。比如addon-acpi从/proc/acpi/event或者/var/run/acpid.socket收到事件，然后转发成HAL事件。addon-storage检测光盘或磁盘的状态，并设置设备的属性。addon-keyboard检测一些特殊按键，并触发相应事件。
+
+简单的说，HAL就是一个设备数据库，它管理当前系统中所有的设备，你可以以多种灵活的方式去查询这些设备，可以获取指定设备的特性，可以注册设备变化事件。
+
+
+##4. D-Bus
+Dbus is like a system bus which is used for inter-process communication.
+
+##5. APP
+终结者对于 gnome 来说就是 gnome-volume-manager (名字太长了，下面简称 gvm)，它从 dbus 上探听消息，当发现有设备挂载提示的时候就会尝试把设备挂载上来。缺省的，还会打开一个 nautilus 浏览窗口来浏览新挂载上的分区的内容。
+
+
+
+
+比较老的但经典的介绍hotplug： http://www.linuxjournal.com/article/5604
+
+Kernel网站上一篇比较老的介绍udev  http://www.kernel.org/pub/linux/utils/kernel/hotplug/udev/udev.html
+
+
+一些有关udev操作配置的教程
+http://www.linuxsky.org/doc/admin/200710/139.html - pratical but not deep in mechanism
+
+SUSE udev introduction: good
+http://www.mpipks-dresden.mpg.de/~mueller/docs/suse10.1/suselinux-manual_en/manual/cha.udev.html#sec.udev.devdir
+
+a good doc on how to config udev rule file
+http://www.linuxformat.co.uk/wiki/index.php/Connect_your_devices_with_udev
+http://ubuntuforums.org/showthread.php?t=168221
+
+
+
+
+偏向于从代码一级进行解释
+http://www.doc88.com/p-618600403098.html
+Linux hotplug 从代码角度
+http://www.embexperts.com/forum.php?mod=viewthread&tid=551
+
+a good sample for writing a driver with UDEV
+http://pete.akeo.ie/2011/08/writing-linux-device-driver-for-kernels.html
 
 
   
