@@ -1,0 +1,110 @@
+//-----------------------------------------------------------------------------
+// Potential Problems Getting udev to Run osrfx2.rules
+//
+// Interesting or related documents --
+//    www.reactivated.net/writing_udev_rules.html
+//    man udev
+//    man udevtest
+//    man udevmonitor
+//-----------------------------------------------------------------------------
+The Makefile attempts to both build and install the osrfx2 driver. Currently 
+the driver is build and installed into the right locations and when the 
+devices is plugged-in it is detected and the osrfx2 driver is loaded correctly. 
+
+The udev service will traverse the /etc/udev/rules.d directory in collating-
+sequence: the numeric prefix portion of the file names are used to effectively 
+set the order the files are interperted.
+
+A potential problem exists in that the osrfx2.rules file appears may not be 
+interperted by udev.  The result is that udev will apply the default rules when 
+creating the device access, which usually means the permissions and access bits
+on the device file (/dev/osrfx2_x) will not allow user-mode applications to
+access write to the device files.
+
+The problem is compounded due to the differences in how various distros order 
+the /etc/udev/rules.d directory (see the directory listings below). In other
+words, due to an apparent lack of guidelines, the distros have been arranging 
+the contents (and therefore interrpeting order) of the /etc/udev/rules.d 
+directory uniquely and often incompatably.
+
+When I started creating udev rules, I naively chose a file name of 
+"20-osrfx2.rules".  This worked fine on Ubuntu, but failed on Fedora.
+
+Upon investigation I found that Fedora has a rules.d layout with 50-udev.rules. 
+This seems in compliance with the "writing_udev_rules" document (see link above).
+So using this document as the governing authority on udev rules, I would have
+to say that Ubuntu appears to be at fault. I have not yet deciphered the 
+rational for the changes which Ubuntu has made to the rules.d directory.
+
+Anyway, I was able to get the osrfx2.rules to be interpreted by assigning 
+a higher valued numeric prefix that "50-udev.rules". In other words, the
+install process now copies osrfx2.rules to /etc/udev/rules.d/60-osrfx2.rules 
+instead of my initial development value of /etc/udev/rules.d/20-osrfx2.rules.
+
+============== Ubuntu-LTS ==============
+robin@ubuntu:/etc/udev/rules.d$ ls -l
+total 140
+-rw-r--r-- 1 root root   262 2006-05-22 07:25 00-init.rules
+-rw-r--r-- 1 root root  2264 2006-05-22 07:25 20-names.rules
+-rw-r--r-- 1 root root   190 2006-05-22 07:25 25-iftab.rules
+-rw-r--r-- 1 root root  3048 2006-05-22 07:25 40-permissions.rules
+-rw-r--r-- 1 root root 47992 2006-05-30 17:55 45-libgphoto2.rules
+-rw-r--r-- 1 root root 28262 2006-04-06 00:12 45-libsane.rules
+lrwxrwxrwx 1 root root    22 2006-10-18 14:10 60-osrfx2.rules -> /etc/udev/osrfx2.rules
+-rw-r--r-- 1 root root  1306 2006-05-22 07:25 60-symlinks.rules
+-rw-r--r-- 1 root root  2585 2006-05-22 07:25 65-persistent-disk.rules
+-rw-r--r-- 1 root root   385 2006-05-22 07:25 80-programs.rules
+-rw-r--r-- 1 root root   171 2006-05-29 05:03 85-alsa.rules
+-rw-r--r-- 1 root root   208 2006-05-22 08:09 85-hal.rules
+-rw-r--r-- 1 root root    81 2006-01-04 03:13 85-hdparm.rules
+-rw-r--r-- 1 root root   126 2006-05-15 18:43 85-hwclock.rules
+-rw-r--r-- 1 root root   657 2006-01-30 05:40 85-ifupdown.rules
+-rw-r--r-- 1 root root   937 2006-03-23 12:40 85-pcmcia.rules
+-rw-r--r-- 1 root root    82 2006-05-22 08:09 90-hal.rules
+-rw-r--r-- 1 root root  2534 2006-05-22 07:25 90-modprobe.rules
+-rw-r--r-- 1 root root    75 2006-05-22 07:25 99-udevmonitor.rules
+========================================
+
+=========== Fedora Core 5 ==============
+[robin@vmFedora rules.d]$ ls -l
+total 120
+-rw-r--r-- 1 root root   434 Mar  8  2006 05-udev-early.rules
+-rw-r--r-- 1 root root   141 Feb 11  2006 10-wacom.rules
+-rw-r--r-- 1 root root 13935 Mar  8  2006 50-udev.rules
+-rw-r--r-- 1 root root   469 Mar  8  2006 51-hotplug.rules
+-rw-r--r-- 1 root root 27524 Feb 22  2006 60-libsane.rules
+-rw-r--r-- 1 root root    68 Jan 20  2006 60-net.rules
+lrwxrwxrwx 1 root root    22 Oct 18 13:16 60-osrfx2.rules -> /etc/udev/osrfx2.rules
+-rw-r--r-- 1 root root  1073 Feb 12  2006 60-pcmcia.rules
+-rw-r--r-- 1 root root    82 Mar  3  2006 90-hal.rules
+-rw-r--r-- 1 root root   106 Mar  8  2006 95-pam-console.rules
+-rwxr-xr-x 1 root root   114 Feb 20  2006 alsa.rules
+========================================
+
+There is a utility named "udevtest" which can be used to validate udev rules.
+Below shows the output from running udevtest on both Ubuntu and Fedora
+systems.  Note the changes in syntax between these two distros for this 
+command.
+
+============== Ubuntu-LTS ==============
+robin@ubuntu:~$ udevtest /class/usb/osrfx2_0 usb
+main: looking at device '/class/usb/osrfx2_0' from subsystem 'usb'
+main: opened class_dev->name='osrfx2_0'
+udev_rules_get_name: no node name set, will use kernel name 'osrfx2_0'
+create_node: creating device node '/dev/osrfx2_0', major = '180', 
+             minor = '192', mode = '0666', uid = '0', gid = '0'
+========================================
+
+=========== Fedora Core 5 ==============
+[robin@vmFedora]~$ sudo udevtest /class/usb/osrfx2_0
+main: looking at device '/class/usb/osrfx2_0' from subsystem 'usb'
+udev_rules_get_name: no node name set, will use kernel name 'osrfx2_0'
+create_node: creating device node '/dev/osrfx2_0', major = '180', 
+             minor = '192', mode = '0666', uid = '0', gid = '0'
+main: run: 'socket:/org/kernel/udev/monitor'
+main: run: '/lib/udev/udev_run_devd'
+main: run: 'socket:/org/freedesktop/hal/udev_event'
+main: run: '/sbin/pam_console_apply /dev/osrfx2_0 '
+========================================
+
+

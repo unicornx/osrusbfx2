@@ -437,9 +437,6 @@ udev是一个用户模式程序。它的配置文件是/etc/udev/udev.conf。这
 
 
 
-a good sample for writing a driver with UDEV
-http://pete.akeo.ie/2011/08/writing-linux-device-driver-for-kernels.html
-
 
   
 

@@ -1,0 +1,134 @@
+*******************************************************************************
+******* Latest info on the OSR USB FX2 Learning Kit driver for Linux **********
+*******************************************************************************
+
+//-----------------------------------------------------------------------------
+// Please read the OSR USB FX2 Learning Kit device specification before 
+// beginning.
+//-----------------------------------------------------------------------------
+
+It is general assumed that the developer has downloaded the "OSR USB FX2 Learn-
+ing Kit" for Window (http://www.osronline.com/article.cfm?article=371) and read
+the OSR USB FX2 device spec (http://www.osronline.com/hardware/OSRFX2_32.pdf).
+
+If you have a Windows (2K,XP,2K3) you can build and test their WDM-based 
+driver for a base-line comparison.  
+
+For extra credit, you can also download and build a WDF-base version found at 
+http://www.codeproject.com/system/kmdf_osr_usb_fx2.asp
+
+
+//-----------------------------------------------------------------------------
+// This section describes how to setup USB development on a Ubuntu LTS (6.06).
+// This will install the necessary utilities and headers/libs to support 
+// recompiling the osrfx2 project.
+//
+// The reasons for including this bit of information is that Ubuntu-LTS has
+// a policy of not supporting private-built kernels. They therefore provide 
+// the required linux-headers as a package. 
+//-----------------------------------------------------------------------------
+
+for Ubuntu LTS
+
+    sudo apt-get install linux-headers-$(uname -r)
+    sudo apt-get install kernel-package ncurses-dev fakeroot wget bzip2
+
+
+for Fedora Core 5
+
+    sudo yum install kernel-devel-$(uname -r)
+
+//-----------------------------------------------------------------------------
+// Unpacking of source and initial build of OSR USB FX2 package
+//-----------------------------------------------------------------------------
+
+    robin@vmUbuntu:~$ export CVS_RSH=ssh
+    robin@vmUbuntu:~$ cvs -d:pserver:anonymous@osrfx2.cvs.sourceforge.net:/cvsroot/osrfx2 login
+    robin@vmUbuntu:~$ cvs -z3 -d:pserver:anonymous@osrfx2.cvs.sourceforge.net:/cvsroot/osrfx2 co -P osrfx2
+    robin@vmUbuntu:~$ cd osrfx2/Linux
+    robin@vmUbuntu:~/osrfx2/Linux$ make
+    robin@vmUbuntu:~/osrfx2/Linux$ sudo make install
+    robin@vmUbuntu:~/osrfx2/Linux$ chmod 777 scripts/*
+    robin@vmUbuntu:~/osrfx2/Linux$ chmod 777 switch_events/get_events
+    robin@vmUbuntu:~/osrfx2/Linux$ # plug device into USB port
+    robin@vmUbuntu:~/osrfx2/Linux$ dmesg | tail
+
+//-----------------------------------------------------------------------------
+// Development cycle (from within ~/osrfx2/Linux/driver directory)
+//-----------------------------------------------------------------------------
+
+    robin@vmUbuntu:~/osrfx2/Linux/driver$ # unplug device from USB port
+    robin@vmUbuntu:~/osrfx2/Linux/driver$ sudo rmmod osrfx2
+    robin@vmUbuntu:~/osrfx2/Linux/driver$ gedit osrfx2.c &
+    robin@vmUbuntu:~/osrfx2/Linux/driver$ make 
+    robin@vmUbuntu:~/osrfx2/Linux/driver$ sudo make refresh
+    robin@vmUbuntu:~/osrfx2/Linux/driver$ # plug device into USB port and test
+    
+//-----------------------------------------------------------------------------
+// Tree view of project 
+//-----------------------------------------------------------------------------
+
+       osrfx2
+       |-- Linux
+       |   |-- Makefile
+       :   |-- README
+       :   |-- driver
+           |   |-- osrfx2.rules
+           |   |-- Makefile
+           |   `-- osrfx2.c
+           |-- osrbulk
+           |   |-- Makefile
+           |   |-- osrbulk.c
+           |   |-- polling
+           |   |   `-- osrbulk.c
+           |   `-- simple
+           |       `-- osrbulk.c
+           |-- osrfx2
+           |   |-- Makefile
+           |   `-- osrfx2.c
+           |-- scripts
+           |   |-- get_7segment
+           |   |-- get_bargraph
+           |   |-- get_switches
+           |   |-- set_7segment
+           |   |-- set_bargraph1
+           |   `-- set_bargraph2
+           `-- switch_events
+               |-- Makefile
+               |-- get_events
+               `-- switch_events.c
+
+//-----------------------------------------------------------------------------
+// Linux USB development as guest on VMWare
+//-----------------------------------------------------------------------------
+Most of the development for the osrfx2 driver was staged on Ubuntu-LTS (6.06)
+Linux running as a guest OS under Windows VMware. I found this environment very
+useful and would recommend it especially for novice driver developers. I also 
+have Fedora Core-5 installed as guest OS and use it mostly for testing. My plan
+is to have several other current Linux distros installed for testing and 
+verification.  I only have access to one "real" Linux, installed with Ubuntu-LTS
+which I use for power-management (suspend, resume, et.al.), just to be keep my 
+VMWare experiences grounded in reality. :-)
+
+//-----------------------------------------------------------------------------
+// Other useful USB-related tools
+//-----------------------------------------------------------------------------
+The following heap of names are tool which I found useful in USB development.
+
+Linux-side:
+
+        lsusb -vvv      //  List USB devices
+        
+        usbview         // A graphical USB device tree view tool.
+
+
+Windows-side:
+        
+        SnoopyPro       // A software-based USB sniffer, which is quite useful
+                        // in reverse-engineering how Windows drivers interact
+                        // with the USB hardware.
+
+//-----------------------------------------------------------------------------
+//
+//-----------------------------------------------------------------------------
+
