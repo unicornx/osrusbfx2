@@ -20,7 +20,7 @@ Based on MS WDK osrusbfx2 samples + CY001 learning board, added more with my ide
      * [README](./windows/osrusbfx2/README.md)
      * [Step by Step, 为OSRFX2创建一个KMDF驱动程序](./windows/osrusbfx2/doc/Building-KMDF-Driver-for-OSRFX2.md): 一个基于osrusbfx2例子的小教程。  
 
-* linux - 鄙人正在研究Linux上的OSRFX2，如果有更新会放上来。（TBD）
+* linux - Linux版本的源代码和相关文件。参考[README](./linux/README.md)
 
 更详细的说明可以参考各分目录下的说明README.md
 
