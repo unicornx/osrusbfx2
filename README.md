@@ -11,18 +11,26 @@ Based on MS WDK osrusbfx2 samples + CY001 learning board, added more with my ide
 
 再接下来就有了这个项目。所以如果你手头有CY001，又想学习WDK的OSRUSBFX2，那不妨试试阅读以下我写的这个玩意。其实在设备（Device）侧，如果你没有CY001，但只要有任何一块基于Cypress的FX2系列USB芯片的学习开发板（大陆做这种开发板的貌似不少，淘宝上可以搜搜），同时你对修改设备的固件也有兴趣，都可以按照相同的思路尝试以下。我的这个就当是抛砖引玉了吧。
 
-# 目录结构
-* osrfx2fw - CY001的固件Keil工程源代码。已经过修改模拟OSRFX2学习板 [README](./osrfx2fw/README.md)
-* windows  - Windows版本的源代码和相关文件。已经过修改以适配CY001与实际的OSRFX2学习板的不同。
- * drivers - 驱动安装包。目前只提供了x86的版本。[README](./windows/drivers/README.md)
- * drvinst - 驱动安装和卸载程序，演示DIFxAPI和SetupAPI的典型用例。[README](./windows/drvinst/README.md)
- * osrusbfx2 - WDK的osrusbfx2例子，经过修改适配CY001。
-     * [README](./windows/osrusbfx2/README.md)
-     * [Step by Step, 为OSRFX2创建一个KMDF驱动程序](./windows/osrusbfx2/doc/Building-KMDF-Driver-for-OSRFX2.md): 一个基于osrusbfx2例子的小教程。  
+# 目录结构  
+* osrfx2fw - CY001的固件Keil工程源代码。已经过修改模拟OSRFX2学习板  
+ * [README](./osrfx2fw/README.md): 介绍了如何基于CY001模拟OSRFX2。  
 
-* linux - Linux版本的源代码和相关文件。参考[README](./linux/README.md)
+* windows  - Windows版本的源代码和相关文件。已经过修改以适配CY001与实际的OSRFX2学习板的不同。  
+ * drivers - 驱动安装包。目前只提供了x86的版本。  
+     * [README](./windows/drivers/README.md)  
+ * drvinst - 驱动安装和卸载程序，演示DIFxAPI和SetupAPI的典型用例。  
+     * [README](./windows/drvinst/README.md)  
+     * [Windows设备和驱动的安装](./windows/drvinst/device-and-driver-installation.md)  
+ * osrusbfx2 - WDK的osrusbfx2例子，经过修改适配CY001。  
+     * [README](./windows/osrusbfx2/README.md)  
+     * [学习笔记-Developing Drivers with the Microsoft Windows Driver Foundation](./windows/osrusbfx2/doc/note-DDMWDF.md)  
+     * [(原创)Step by Step, 为OSRFX2创建一个KMDF驱动程序](./windows/osrusbfx2/doc/Building-KMDF-Driver-for-OSRFX2.md): 一个基于osrusbfx2例子的小教程。  
 
-更详细的说明可以参考各分目录下的说明README.md
+* linux - Linux版本的源代码和相关文件。  
+ * [README](./linux/README.md)  
+ * [学习笔记-Linux Device Drivers, 3rd Edition](./linux/doc/learning-ldd3/notes.md)  
+
+更详细的说明可以参考各分目录下的说明文件。  
 
 # 联系方式
 unicorn_wang@outlook.com
