@@ -14,21 +14,19 @@ Based on MS WDK osrusbfx2 samples + CY001 learning board, added more with my ide
 # 目录结构  
 * osrfx2fw - CY001的固件Keil工程源代码。已经过修改模拟OSRFX2学习板  
  * [README](./osrfx2fw/README.md): 介绍了如何基于CY001模拟OSRFX2。  
-
 * windows  - Windows版本的源代码和相关文件。已经过修改以适配CY001与实际的OSRFX2学习板的不同。  
  * drivers - 驱动安装包。目前只提供了x86的版本。  
      * [README](./windows/drivers/README.md)  
  * drvinst - 驱动安装和卸载程序，演示DIFxAPI和SetupAPI的典型用例。  
      * [README](./windows/drvinst/README.md)  
-     * [Windows设备和驱动的安装](./windows/drvinst/device-and-driver-installation.md)  
+     * [(原创)Windows设备和驱动的安装](./windows/drvinst/device-and-driver-installation.md)  
  * osrusbfx2 - WDK的osrusbfx2例子，经过修改适配CY001。  
      * [README](./windows/osrusbfx2/README.md)  
-     * [学习笔记-Developing Drivers with the Microsoft Windows Driver Foundation](./windows/osrusbfx2/doc/note-DDMWDF.md)  
+     * [(原创)学习笔记-Developing Drivers with the Microsoft Windows Driver Foundation](./windows/osrusbfx2/doc/note-DDMWDF.md)  
      * [(原创)Step by Step, 为OSRFX2创建一个KMDF驱动程序](./windows/osrusbfx2/doc/Building-KMDF-Driver-for-OSRFX2.md): 一个基于osrusbfx2例子的小教程。  
-
 * linux - Linux版本的源代码和相关文件。  
  * [README](./linux/README.md)  
- * [学习笔记-Linux Device Drivers, 3rd Edition](./linux/doc/learning-ldd3/notes.md)  
+ * [(原创)学习笔记-Linux Device Drivers, 3rd Edition](./linux/doc/learning-ldd3/notes.md)  
 
 更详细的说明可以参考各分目录下的说明文件。  
 
