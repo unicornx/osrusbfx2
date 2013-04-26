@@ -4,22 +4,19 @@ LDD3 on line doc @ http://lwn.net/Kernel/LDD3/
 
 Linux Kernel Source on line @ http://lxr.free-electrons.com/ident
 
-"Linux Device Drivers Series" tag @ http://www.linuxforu.com/tag/linux-device-drivers-series/page/2/
+一个简单但生动的教程 "Linux Device Drivers Series" tag @ http://www.linuxforu.com/tag/linux-device-drivers-series/page/2/
 
-
-http://www.codeproject.com/Articles/112474/A-Simple-Driver-for-Linux-OS
-
+一些例子教程:  
+http://www.codeproject.com/Articles/112474/A-Simple-Driver-for-Linux-OS  
 https://www.kernel.org/doc/htmldocs/writing_usb_driver.html
 
-http://www.kroah.com/ - Greg Kroah-Hartman's homepage
+http://www.kroah.com/ - Greg Kroah-Hartman's homepage  
 https://github.com/gregkh - Greg Kroah-Hartman's github
 
 #Chapter2:#
-按照书上的例子hello的说法会在终端显示“Hello, world”。但是运行后什么都没有出现 （原因不解）。
+对ubuntu下,按照书上的例子hello的说法会在终端显示“Hello, world”。但是运行后什么都没有出现的解释:
 
-对ubuntu下控制台无法显示printk的解释：
-
-=================================================  
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 printk 是内核的调用接口，它在系统init之前，把消息写往控制台，但是一旦系统init之后，便改写到系统的日志中。因为init之后用户所能够感受到的进程(拥有控制台)都是用户空间的进程,而用户空间的进程是无法反映内核数据的,除非通过一定的方式(如proc文件,netlink...)向内核申请相关的信息,并在用户空间反映出来.这样做的好处不言而喻的，如果内核在任何的时候都可以写信息到控制台，那控制台一定会被这样的信息淹没，而无法工作。
 
 系统初始化进程(pid=0),工作在内核空间,它在启动init进程(pid=1)之前,把所有的信息通过printk内核方法写往控制台.printk把欲打印的日志消息,首先首先保存到内核的日志缓冲区之中.而后申请控制台的信号量，如果申请到，则调用控制台写方法，写控制台.而此时系统中并没有打开控制台,故而初始化进程,可以申请到控制台的信号量.当系统初始化到达一定阶段后,便会启动init进程(pid=1),并在此之前打开控制台,控制台的信号量增加,此后，printk便无法申请到信号量,而无法写数据到控制台.转而通过和用户空间的进程协作把内核的日志消息写到系统道的日志文件之中.-------前台进程通过sys_log系统调用读出，并根据配置文件sys_conf写向相应的日志文件或/var/log/messages文件中。
@@ -28,7 +25,7 @@ printk 是内核的调用接口，它在系统init之前，把消息写往控制
 
 可以切换到linux提供的终端来看到tty下的输出， 这个就很简单了，直接按Alt+Ctrl+F1~F6
 Alt+Ctrl+F7即可退出返回GNOME
-=================================================
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 书中说明如果不出现在终端 则会写进 syslog 文件中，所以看一下系统日志：
 
@@ -55,31 +52,31 @@ struct file {
 struct file_operations {  
 	struct module *owner;  
 	loff_t (*llseek) (struct file *, loff_t, int);  
-	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
-	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
-	ssize_t (*aio_read) (struct kiocb *, const struct iovec *, unsigned long, loff_t);
-	ssize_t (*aio_write) (struct kiocb *, const struct iovec *, unsigned long, loff_t);
-	int (*readdir) (struct file *, void *, filldir_t);
-	unsigned int (*poll) (struct file *, struct poll_table_struct *);
-	int (*ioctl) (struct inode *, struct file *, unsigned int, unsigned long);
-	long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
-	long (*compat_ioctl) (struct file *, unsigned int, unsigned long);
-	int (*mmap) (struct file *, struct vm_area_struct *);
-	int (*open) (struct inode *, struct file *);
-	int (*flush) (struct file *, fl_owner_t id);
-	int (*release) (struct inode *, struct file *);
-	int (*fsync) (struct file *, struct dentry *, int datasync);
-	int (*aio_fsync) (struct kiocb *, int datasync);
-	int (*fasync) (int, struct file *, int);
-	int (*lock) (struct file *, int, struct file_lock *);
-	ssize_t (*sendpage) (struct file *, struct page *, int, size_t, loff_t *, int);
-	unsigned long (*get_unmapped_area)(struct file *, unsigned long, unsigned long, unsigned long, unsigned long);
-	int (*check_flags)(int);
-	int (*flock) (struct file *, int, struct file_lock *);
-	ssize_t (*splice_write)(struct pipe_inode_info *, struct file *, loff_t *, size_t, unsigned int);
-	ssize_t (*splice_read)(struct file *, loff_t *, struct pipe_inode_info *, size_t, unsigned int);
-	int (*setlease)(struct file *, long, struct file_lock **);
-};
+	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);  
+	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);  
+	ssize_t (*aio_read) (struct kiocb *, const struct iovec *, unsigned long, loff_t);  
+	ssize_t (*aio_write) (struct kiocb *, const struct iovec *, unsigned long, loff_t);  
+	int (*readdir) (struct file *, void *, filldir_t);  
+	unsigned int (*poll) (struct file *, struct poll_table_struct *);  
+	int (*ioctl) (struct inode *, struct file *, unsigned int, unsigned long);  
+	long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);  
+	long (*compat_ioctl) (struct file *, unsigned int, unsigned long);  
+	int (*mmap) (struct file *, struct vm_area_struct *);  
+	int (*open) (struct inode *, struct file *);  
+	int (*flush) (struct file *, fl_owner_t id);  
+	int (*release) (struct inode *, struct file *);  
+	int (*fsync) (struct file *, struct dentry *, int datasync);  
+	int (*aio_fsync) (struct kiocb *, int datasync);  
+	int (*fasync) (int, struct file *, int);  
+	int (*lock) (struct file *, int, struct file_lock *);  
+	ssize_t (*sendpage) (struct file *, struct page *, int, size_t, loff_t *, int);  
+	unsigned long (*get_unmapped_area)(struct file *, unsigned long, unsigned long, unsigned long, unsigned long);  
+	int (*check_flags)(int);  
+	int (*flock) (struct file *, int, struct file_lock *);  
+	ssize_t (*splice_write)(struct pipe_inode_info *, struct file *, loff_t *, size_t, unsigned int);  
+	ssize_t (*splice_read)(struct file *, loff_t *, struct pipe_inode_info *, size_t, unsigned int);  
+	int (*setlease)(struct file *, long, struct file_lock **);  
+};  
 
 struct inode {  
 ...  
@@ -123,10 +120,10 @@ http://www.linuxquestions.org/questions/programming-9/where-is-printk-output-650
 查看当前控制台日志级别：  
 cat /proc/sys/kernel/printk  
 4 4 1 7  
-console_loglevel: the current level below which the messages are displayed in console  
-default_message_loglevel: the default level for messages without a specified priority when you call printk  
-minimum_console_loglevel: the minimum level allowed for console messages //? don't know what it is used, when I see it is "1", but if I call printk with 0, still output  
-default_console_loglevel: the level used by the command 'enable printk's to console' in syslog(2).   
+- console_loglevel: the current level below which the messages are displayed in console  
+- default_message_loglevel: the default level for messages without a specified priority when you call printk  
+- minimum_console_loglevel: the minimum level allowed for console messages //? don't know what it is used, when I see it is "1", but if I call printk with 0, still output  
+- default_console_loglevel: the level used by the command 'enable printk's to console' in syslog(2).   
 以上对应console_printk变量
 
 to quick open console printk  
@@ -160,7 +157,7 @@ strace命令的使用，它可以显示由用户空间程序发出的所有系�
 文件系统对设备的表达一直没有搞清楚。
 
 32位总线
-`pci0000:00/0000:00:1d.7` 
+`pci0000:00/0000:00:1d.7`  
 `          |    |  |    |  |  |_功能(3bit)`         
 `          |    |  |__设备(5bit)`  
 `          |    |_总线（8位）`  
@@ -171,107 +168,101 @@ strace命令的使用，它可以显示由用户空间程序发出的所有系�
 /include/linux/usb/Ch9.h, in which define all usb2 basic types
 
 
-USB设备的表达式格式：
-root_hub-hub_port:config.interface
-root_hub： 1 起序
-hub_port： 1 起序
-config： 1 起序
-interface： 0 起序
-sysfs例子：
-/sys/devices/pci0000:00/0000:00:09.0/usb2/2-1
-|-- 2-1:1.0
-| |-- bAlternateSetting
-| |-- bInterfaceClass
-| |-- bInterfaceNumber
-| |-- bInterfaceProtocol
-| |-- bInterfaceSubClass
-| |-- bNumEndpoints
-| |-- detach_state
-| |-- iInterface
-| `-- power
-| `-- state
-|-- bConfigurationValue
-|-- bDeviceClass
-|-- bDeviceProtocol
-|-- bDeviceSubClass
-|-- bMaxPower
-|-- bNumConfigurations
-|-- bNumInterfaces
-|-- bcdDevice
-|-- bmAttributes
-|-- detach_state
-|-- devnum
-|-- idProduct
-|-- idVendor
-|-- maxchild
-|-- power
-| `-- state
-|-- speed
-`-- version
+USB设备的表达式格式：  
+root_hub-hub_port:config.interface  
+root_hub： 1 起序  
+hub_port： 1 起序  
+config： 1 起序  
+interface： 0 起序  
+sysfs例子：  
+/sys/devices/pci0000:00/0000:00:09.0/usb2/2-1  
+|-- 2-1:1.0  
+| |-- bAlternateSetting  
+| |-- bInterfaceClass  
+| |-- bInterfaceNumber  
+| |-- bInterfaceProtocol  
+| |-- bInterfaceSubClass  
+| |-- bNumEndpoints  
+| |-- detach_state  
+| |-- iInterface  
+| `-- power  
+| `-- state  
+|-- bConfigurationValue  
+|-- bDeviceClass  
+|-- bDeviceProtocol  
+|-- bDeviceSubClass  
+|-- bMaxPower  
+|-- bNumConfigurations  
+|-- bNumInterfaces  
+|-- bcdDevice  
+|-- bmAttributes  
+|-- detach_state  
+|-- devnum  
+|-- idProduct  
+|-- idVendor  
+|-- maxchild  
+|-- power  
+| `-- state  
+|-- speed  
+`-- version  
 
 
 usbfs does not exit since 2.6.32
 
 ##USB Urbs
 The typical lifecycle of a urb is as follows:
-• Created by a USB device driver.
-• Assigned to a specific endpoint of a specific USB device.
-• Submitted to the USB core, by the USB device driver.
-• Submitted to the specific USB host controller driver for the specified device by
-the USB core.
-• Processed by the USB host controller driver that makes a USB transfer to the
-device.
-• When the urb is completed, the USB host controller driver notifies the USB
-device driver.
+• Created by a USB device driver.  
+• Assigned to a specific endpoint of a specific USB device.  
+• Submitted to the USB core, by the USB device driver.  
+• Submitted to the specific USB host controller driver for the specified device by the USB core.  
+• Processed by the USB host controller driver that makes a USB transfer to the device.  
+• When the urb is completed, the USB host controller driver notifies the USB device driver.  
 
-/include/linux/usb.h
-struct urb {
-	/* private: usb core and host controller only fields in the urb */
-	struct kref kref;		/* reference count of the URB */
-	void *hcpriv;			/* private data for host controller */
-	atomic_t use_count;		/* concurrent submissions counter */
-	atomic_t reject;		/* submissions will fail */
-	int unlinked;			/* unlink error code */
-
-	/* public: documented fields in the urb that can be used by drivers */
-	struct list_head urb_list;	/* list head for use by the urb's
-					 * current owner */
-	struct list_head anchor_list;	/* the URB may be anchored */
-	struct usb_anchor *anchor;
-	struct usb_device *dev; 	/* (in) pointer to associated device */
-	struct usb_host_endpoint *ep;	/* (internal) pointer to endpoint */
-	unsigned int pipe;		/* (in) pipe information */
-	int status;			/* (return) non-ISO status */ 当URB结束或者正在被usbcore处理时返回的当前状态。主要用于Non-ISO（相对于Isochronous传输，Non-ISO指Bulk，Control或者Interrut传输）的返回状态值，对于Isochronous传输，如果该值不为0，则表示URB发生了unlink现象（所谓unlink是指当一个URB被提交给core之后而未完成之前被驱动主动撤销或者发生了设备被移除的事件）。该值驱动应该只在完成函数中访问该变量，对于Isochronous的URB返回状态值，参考iso_frame_desc成员
-	unsigned int transfer_flags;	/* (in) URB_SHORT_NOT_OK | ...*/
-	void *transfer_buffer;		/* (in) associated data buffer */
-	dma_addr_t transfer_dma;	/* (in) dma addr for transfer_buffer */
-	struct usb_sg_request *sg;	/* (in) scatter gather buffer list */
-	int num_sgs;			/* (in) number of entries in the sg list */
-	u32 transfer_buffer_length;	/* (in) data buffer length */
-	u32 actual_length;		/* (return) actual transfer length */ URB结束时实际发送或者接收的字节数
-	unsigned char *setup_packet;	/* (in) setup packet (control only) */
-	dma_addr_t setup_dma;		/* (in) dma addr for setup_packet */
-	int start_frame;		/* (modify) start frame (ISO) */
-	int number_of_packets;		/* (in) number of ISO packets */
-	int interval;			/* (modify) transfer interval
-					 * (INT/ISO) */
-	int error_count;		/* (return) number of ISO errors */
-	void *context;			/* (in) context for completion */
-	usb_complete_t complete;	/* (in) completion routine */ 完成函数，当URB被usbcore执行完成时回调
-	struct usb_iso_packet_descriptor iso_frame_desc[0];IsochronousURB状态返回值
-					/* (in) ISO ONLY */
-};
+/include/linux/usb.h  
+struct urb {  
+	/* private: usb core and host controller only fields in the urb */  
+	struct kref kref;		/* reference count of the URB */  
+	void *hcpriv;			/* private data for host controller */  
+	atomic_t use_count;		/* concurrent submissions counter */  
+	atomic_t reject;		/* submissions will fail */  
+	int unlinked;			/* unlink error code */  
+  
+	/* public: documented fields in the urb that can be used by drivers */  
+	struct list_head urb_list;	/* list head for use by the urb's  current owner */  
+	struct list_head anchor_list;	/* the URB may be anchored */  
+	struct usb_anchor *anchor;  
+	struct usb_device *dev; 	/* (in) pointer to associated device */  
+	struct usb_host_endpoint *ep;	/* (internal) pointer to endpoint */  
+	unsigned int pipe;		/* (in) pipe information */  
+	int status;			/* (return) non-ISO status */ 当URB结束或者正在被usbcore处理时返回的当前状态。主要用于Non-ISO（相对于Isochronous传输，Non-ISO指Bulk，Control或者Interrut传输）的返回状态值，对于Isochronous传输，如果该值不为0，则表示URB发生了unlink现象（所谓unlink是指当一个URB被提交给core之后而未完成之前被驱动主动撤销或者发生了设备被移除的事件）。该值驱动应该只在完成函数中访问该变量，对于Isochronous的URB返回状态值，参考iso_frame_desc成员  
+	unsigned int transfer_flags;	/* (in) URB_SHORT_NOT_OK | ...*/  
+	void *transfer_buffer;		/* (in) associated data buffer */  
+	dma_addr_t transfer_dma;	/* (in) dma addr for transfer_buffer */  
+	struct usb_sg_request *sg;	/* (in) scatter gather buffer list */  
+	int num_sgs;			/* (in) number of entries in the sg list */  
+	u32 transfer_buffer_length;	/* (in) data buffer length */  
+	u32 actual_length;		/* (return) actual transfer length */ URB结束时实际发送或者接收的字节数  
+	unsigned char *setup_packet;	/* (in) setup packet (control only) */  
+	dma_addr_t setup_dma;		/* (in) dma addr for setup_packet */  
+	int start_frame;		/* (modify) start frame (ISO) */  
+	int number_of_packets;		/* (in) number of ISO packets */  
+	int interval;			/* (modify) transfer interval (INT/ISO) */  
+	int error_count;		/* (return) number of ISO errors */  
+	void *context;			/* (in) context for completion */  
+	usb_complete_t complete;	/* (in) completion routine */ 完成函数，当URB被usbcore执行完成时回调  
+	struct usb_iso_packet_descriptor iso_frame_desc[0]; /* (in) ISO ONLY */ IsochronousURB状态返回值  
+};  
 
 ##URB的创建和删除
 
 创建必需调用API： struct urb *usb_alloc_urb(int iso_packets, int mem_flags); 不可以自己静态定义，否则会破坏系统内建的引用计数跟踪机制  
 删除：void usb_free_urb(struct urb *urb);
 
-创建完URB后可以调用一系列对应的初始化函数对URB进行初始化
-Interrupt urbs： usb_fill_int_urb  
-Bulk urbs： usb_fill_bulk_urb  
-Control urbs：usb_fill_control_urb  
-Isochronous urbs： 没有现成的API，需要手工初始化  
+创建完URB后可以调用一系列对应的初始化函数对URB进行初始化  
+- Interrupt urbs： usb_fill_int_urb  
+- Bulk urbs： usb_fill_bulk_urb  
+- Control urbs：usb_fill_control_urb  
+- Isochronous urbs： 没有现成的API，需要手工初始化  
 
 URB的提交
 创建和初始化完成后，驱动就可以将URB提交给USB core来发送给设备  
@@ -294,12 +285,12 @@ int usb_unlink_urb(struct urb *urb);###异步###通知Core停止一个未完成�
 
 有关热插拔
 
-浅谈hotplug, udev, hal, d-bus: http://linux.chinaunix.net/techdoc/net/2009/06/29/1120750.shtml
-理解和使用Linux的硬件抽象层HAL http://blog.csdn.net/colorant/article/details/2611559
-Linux里udev的工作原理：http://www.ha97.com/1003.html
-Udev: Introduction to Device Management In Modern Linux System： http://www.linux.com/news/hardware/peripherals/180950-udev
-http://blog.csdn.net/fjb2080/article/details/4842814 - a serial article about udev
-有关内核加载模块: http://www.360doc.com/content/12/0628/16/1162697_220995749.shtml 
+浅谈hotplug, udev, hal, d-bus: http://linux.chinaunix.net/techdoc/net/2009/06/29/1120750.shtml  
+理解和使用Linux的硬件抽象层HAL http://blog.csdn.net/colorant/article/details/2611559  
+Linux里udev的工作原理：http://www.ha97.com/1003.html  
+Udev: Introduction to Device Management In Modern Linux System： http://www.linux.com/news/hardware/peripherals/180950-udev  
+http://blog.csdn.net/fjb2080/article/details/4842814 - a serial article about udev  
+有关内核加载模块: http://www.360doc.com/content/12/0628/16/1162697_220995749.shtml  
 
 
 5.App  
