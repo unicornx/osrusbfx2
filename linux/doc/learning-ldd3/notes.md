@@ -195,6 +195,9 @@ Linux2.6PCI驱动加载原理： http://linux.chinaunix.net/techdoc/develop/2008
 
 - 然后当设备插上来的时候，内核告知热插拔系统一个新的USB设备被发现，内核的hotplug子系统就会查看/lib/modules/KERNEL_VERSION/目录下的mapmodule配置文件来加载ko了。
 
+### modprobe和insmod的区别
+参考：http://blog.csdn.net/wenlifu71022/article/details/4256196  
+udev依赖于modprobe来自动加载模块，insmod更多是用于我们自己手工测试加载，因为insmod不会自动检查依赖性，而且要我们手工给出ko的具体路径，modprobe要读取/lib/modules/VERSION/modules.dep档案得知相依性的。而该档案是透过 depmod 程式所建立。
 
 #Chapter13 USB drivers
 /include/linux/usb/Ch9.h, in which define all usb2 basic types
