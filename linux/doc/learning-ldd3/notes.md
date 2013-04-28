@@ -164,6 +164,38 @@ strace命令的使用，它可以显示由用户空间程序发出的所有系�
 `          |_PCI域(16bit)`
 
 
+#Chapter12 PCI drivers
+
+## MODULE_DEVICE_TABLE
+
+涉及到一个重要的概念：驱动加载原理  
+PCI和USB设备驱动的加载原理是相通的。
+参考：  
+http://lwn.net/images/pdf/LDD3/ch12.pdf 的MODULE_DEVICE_TABLE章节  
+有关内核加载模块: http://www.360doc.com/content/12/0628/16/1162697_220995749.shtml  
+Linux2.6PCI驱动加载原理： http://linux.chinaunix.net/techdoc/develop/2008/09/13/1032304.shtml  
+比较老的但经典的介绍hotplug： http://www.linuxjournal.com/node/5604/print  
+
+- 首先，代码里我们需要添加如下类似code：  
+`static struct usb_device_id id_table [] = {`  
+`    { USB_DEVICE( VENDOR_ID, PRODUCT_ID ) },`  
+`    { },`  
+`};`  
+`MODULE_DEVICE_TABLE(usb, id_table);`  
+该宏生成一个名为__mod_pci_device_table的局部变量，该变量指向第二个参数。
+
+- 其次，编写Makefile文件，参考：  
+`INSTALL_DIR  = /lib/modules/$(VERSION)/kernel/drivers/usb/misc`  
+`install:`  
+`        ...`  
+`	-install -d $(INSTALL_DIR)`  
+`	-install -c osrfx2.ko $(INSTALL_DIR)`  
+`	-/sbin/depmod -r`  
+就是将ko文件拷贝到系统的内核目录下，然后运行depmod，depmod程序会在Kernel目录下所有模块中搜索符号__mod_pci_device_table，把数据（设备列表）从模块中抽出，添加到映射文件/lib/modules/KERNEL_VERSION/modules.usbmap中，以及更新module的dep文件等等。当depmod结束之后，所有的PCI设备连同他们的模块名字都被该文件列出。
+
+- 然后当设备插上来的时候，内核告知热插拔系统一个新的USB设备被发现，内核的hotplug子系统就会查看/lib/modules/KERNEL_VERSION/目录下的mapmodule配置文件来加载ko了。
+
+
 #Chapter13 USB drivers
 /include/linux/usb/Ch9.h, in which define all usb2 basic types
 
@@ -293,9 +325,8 @@ udev与硬件抽象层HAL的实现原理 - 写得不错哦，有一些可以值�
 Linux里udev的工作原理：http://www.ha97.com/1003.html  
 Udev: Introduction to Device Management In Modern Linux System： http://www.linux.com/news/hardware/peripherals/180950-udev  
 http://blog.csdn.net/fjb2080/article/details/4842814 - a serial article about udev  
-有关内核加载模块: http://www.360doc.com/content/12/0628/16/1162697_220995749.shtml  
 
-比较老的但经典的介绍hotplug： http://www.linuxjournal.com/article/5604
+比较老的但经典的介绍hotplug： http://www.linuxjournal.com/node/5604/print
 
 偏向于从代码一级进行解释
 http://www.doc88.com/p-618600403098.html
