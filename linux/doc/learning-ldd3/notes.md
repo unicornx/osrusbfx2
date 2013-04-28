@@ -283,12 +283,13 @@ int usb_unlink_urb(struct urb *urb);###异步###通知Core停止一个未完成�
 
 #Chapter14 设备模型
 
-##Kernel2.6实现热插拔的原理说明
+##Kernel 2.6实现热插拔的原理说明
 
 ###参考文献
 
 浅谈hotplug, udev, hal, d-bus: http://linux.chinaunix.net/techdoc/net/2009/06/29/1120750.shtml  
 理解和使用Linux的硬件抽象层HAL http://blog.csdn.net/colorant/article/details/2611559  
+udev与硬件抽象层HAL的实现原理 - 写得不错哦，有一些可以值得参考实现设备动态检测: http://blog.csdn.net/drizztzou/article/details/1648322  
 Linux里udev的工作原理：http://www.ha97.com/1003.html  
 Udev: Introduction to Device Management In Modern Linux System： http://www.linux.com/news/hardware/peripherals/180950-udev  
 http://blog.csdn.net/fjb2080/article/details/4842814 - a serial article about udev  
