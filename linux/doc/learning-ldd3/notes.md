@@ -1,6 +1,7 @@
 学习笔记 ldd3
 
 LDD3 on line doc @ http://lwn.net/Kernel/LDD3/
+一个中文版的 @ http://oss.org.cn/kernel-book/ldd3/
 
 Linux Kernel Source on line @ http://lxr.free-electrons.com/ident
 
