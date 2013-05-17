@@ -986,6 +986,23 @@ WDF并没有提供专门的读取PowerCapability的API，但我们总是可以�
 ### 3.2.4 中断端点处理
 [返回总目录](#contents) 
 
+1.1 __drv_requiresIRQL(PASSIVE_LEVEL)
+
+2----------------------------------------
+Stampinf: http://msdn.microsoft.com/en-us/library/windows/hardware/ff552786(v=vs.85).aspx
+
+3----------------------------------------
+Event trace
+
+
+
+6-----------------------------------------
+Locking Pageable Code or Data: http://msdn.microsoft.com/en-us/library/windows/hardware/ff554307(v=vs.85).aspx
+PAGED_CODE();
+
+
+8 ------------------------------
+WdfUsbTargetDeviceRetrieveInformation 获取设备属性
 
 <a name="references" id="references"></a>
 # 附录I. 参考文献：  
