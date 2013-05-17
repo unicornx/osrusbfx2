@@ -1,0 +1,37 @@
+#!/bin/sh
+
+find_device() {
+	ATTR_FILE=""
+	for file in /sys/bus/usb/devices/[0-9]-[0-9]; do
+		if [ $file = "/sys/bus/usb/devices/[0-9]-[0-9]" ]; then
+			echo "No OSR USB-FX2 devices loaded"
+			exit
+		fi
+		vendor=`cat $file/idVendor`
+		product=`cat $file/idProduct`
+		if [ "$product" = "1002" -a "$vendor" == "0547" ]; then
+			id=`echo $file | sed -e 's,^.*/\([^/]*\)$,\1,'`;
+			ATTR_FILE=$file/$id:1.0/bargraph
+		fi
+	done
+
+	if [ "x$ATTR_FILE" = "x" ]; then
+		echo "Can't find OSR USB-FX2 device"
+		exit
+	fi
+}
+
+find_device
+
+while `/bin\/true`
+do
+	VALUE=`cat $ATTR_FILE 2>/dev/null`
+	if [ $? -ne 0 ]; then
+		find_device
+	fi
+	echo "$VALUE"
+	sleep 1s
+done
+
+	
+
