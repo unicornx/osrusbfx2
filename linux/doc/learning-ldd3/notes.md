@@ -4,6 +4,7 @@ LDD3 on line doc @ http://lwn.net/Kernel/LDD3/
 一个中文版的 @ http://oss.org.cn/kernel-book/ldd3/
 
 Linux Kernel Source on line @ http://lxr.free-electrons.com/ident
+LXR @ China: http://lxr.oss.org.cn/
 
 一个简单但生动的教程 "Linux Device Drivers Series" tag @ http://www.linuxforu.com/tag/linux-device-drivers-series/page/2/
 
@@ -471,6 +472,25 @@ udev是一个用户模式程序。它的配置文件是/etc/udev/udev.conf。这
 
 - step3和step4可以合并写成udevadm info -a -p $(udevadm info -q path -n /dev/bus/usb/001/008)
 
+---
+LDD3 is a bit old and the refered source codes are all based on 2.6.10 and older.
+My PC installed 2.6.32 so I have to corrected some based on my actual env.
+
+note: Google "bus_type_private", can find many good articles about driver model.
+
+<>/init/main.c
+kernel_init
+|_do_basic_setup
+  |_driver_init
+    |_buses_init
+      |_kset_create_and_add("bus", &bus_uevent_ops, NULL); // this will create "/sys/bus" and a global var - static struct kset *bus_kset;
+When we call bus_register to register a new bus type under "/sys/bus"
+bus_register
+{
+...
+	priv->subsys.kobj.kset = bus_kset;
+...
+}
 
 
 

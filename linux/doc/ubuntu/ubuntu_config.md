@@ -49,6 +49,7 @@ sudo apt-get install meld
 
 7) Install sourceinsigt:  
 sudo apt-get install wine
+按TAB键就可以跳到那个ok按钮了
 wine /tmp/sourceinsightinstall.exe
 more details refer to http://hi.baidu.com/zongjunzhou/item/4596a90f45b077193a53eeaa
 
