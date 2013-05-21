@@ -1,7 +1,9 @@
 学习笔记 ldd3
 
 LDD3 on line doc @ http://lwn.net/Kernel/LDD3/  
-一个中文版的 @ http://oss.org.cn/kernel-book/ldd3/
+一个中文版的 @ http://oss.org.cn/kernel-book/ldd3/  
+a project on git to track the latest kernel for the ldd3 example: https://github.com/martinezjavier/ldd3 - maybe having this I can ignore my ldd3 example maintain work :$  
+git clone git://github.com/martinezjavier/ldd3.git
 
 Linux Kernel Source on line @ http://lxr.free-electrons.com/ident
 LXR @ China: http://lxr.oss.org.cn/
