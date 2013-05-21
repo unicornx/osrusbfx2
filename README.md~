@@ -2,7 +2,7 @@
 
 Based on "OSRFX2 Learning Kit" + "CY001 learning Kit", added more with my idea to demo how-to learning writing host drivers for USB devices on Windows & Linux.
 
-# 为何要写这个东东  
+# 为何要写这个东东
 诸位学习主机（host）侧USB驱动开发的同仁，想必在学习过程中一定也有鄙人相同的经历感受。那就是手头如果有一块USB的开发学习板，那效率一定会高很多。所以在下当时也是出于此目的在网上买了张佩大侠提供的配合《竹林蹊径：深入浅出windows驱动开发》的学习板CY001，以作学习的用途。
 
 我对驱动的学习是从Wiindows平台开始的，毕竟PC上Windows仍是霸主。在学习USB驱动开发时鄙人有一个重要的体会是：微软WDK中提供的例子是最值得仔细研习的。USB驱动相关的例子中尤以osrusbfx2这个例子最为经典。osrusbfx2是配合著名的OSRFX2学习板精心编写的一套例子。非常适合Windows上学习USB驱动开发的朋友入门学习用。不光是入门用，平时也会常常参考。据说微软WDK开发小组的程序员也要经常用OSRFX2的板子来做测试呢（具体在哪里看到的忘记了），可见其重要性。
@@ -18,35 +18,33 @@ Based on "OSRFX2 Learning Kit" + "CY001 learning Kit", added more with my idea t
  * [README](./osrfx2fw/README.md): 介绍了如何基于CY001模拟OSRFX2。  
 * windows  - Windows版本的源代码和相关文件。已经过修改以适配CY001与实际的OSRFX2学习板的不同。  
  * drivers - 驱动安装包。目前只提供了x86的版本。  
-  * [README](./windows/drivers/README.md)  
+     * [README](./windows/drivers/README.md)  
  * drvinst - 驱动安装和卸载程序，演示DIFxAPI和SetupAPI的典型用例。  
-  * [README](./windows/drvinst/README.md)  
-  * [(原创)Windows设备和驱动的安装](./windows/drvinst/device-and-driver-installation.md)  
+     * [README](./windows/drvinst/README.md)  
+     * [(原创)Windows设备和驱动的安装](./windows/drvinst/device-and-driver-installation.md)  
  * osrusbfx2 - WDK的osrusbfx2例子，经过修改适配CY001。  
-  * [README](./windows/osrusbfx2/README.md)  
-  * [(原创)学习笔记-Developing Drivers with the Microsoft Windows Driver Foundation](./windows/osrusbfx2/doc/note-DDMWDF.md)  
-  * [(原创)Step by Step, 为OSRFX2创建一个KMDF驱动程序](./windows/osrusbfx2/doc/Building-KMDF-Driver-for-OSRFX2.md): 一个基于osrusbfx2例子的小教程。  
+     * [README](./windows/osrusbfx2/README.md)  
+     * [(原创)学习笔记-Developing Drivers with the Microsoft Windows Driver Foundation](./windows/osrusbfx2/doc/note-DDMWDF.md)  
+     * [(原创)Step by Step, 为OSRFX2创建一个KMDF驱动程序](./windows/osrusbfx2/doc/Building-KMDF-Driver-for-OSRFX2.md): 一个基于osrusbfx2例子的小教程。  
 * linux - Linux版本的源代码和相关文件。  
  * [README](./linux/README.md)  
  * [(原创)学习笔记-Linux Device Drivers, 3rd Edition](./linux/doc/learning-ldd3/notes.md)  
 
 更详细的说明可以参考各分目录下的说明文件。  
 
-# 联系方式  
+# 联系方式
 unicorn_wang@outlook.com
 
+p.s. 该项目已经上传到GitHub，大家如果熟悉GitHub也可以上Github观赏并联机提出宝贵意见。地址是: https://github.com/unicornx/osrusbfx2
 
-# 下载和访问  
-该项目的所有文档和代码都上传到GitHub，大家如果熟悉GitHub可以上Github观赏并联机提出宝贵意见。地址是: https://github.com/unicornx/osrusbfx2
+该项目另一个发布的平台在“驱动开发网” - "基于WDK的OSRUSBFX2写了点例子代码，有兴趣的可以看看"
+http://bbs3.driverdevelop.com/read.php?tid-125258.html
 
-下载该项目的方法：
+# 下载该项目的方法：
 
 mkdir yourworkspacefolder  
 cd yourworkspacefolder  
 git clone https://github.com/unicornx/osrusbfx2.git
-
-该项目另一个发布的平台在“图灵社区” - "osrusbfx2 - Step by Step USB驱动开发"  
-http://www.ituring.com.cn/minibook/726
 
 enjoy it! :)
 
