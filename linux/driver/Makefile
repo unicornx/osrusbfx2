@@ -47,6 +47,7 @@ all:
 #------------------------------------------------------------------------------
 clean:
 	rm -f *.o *~ core .depend .*.cmd *.ko *.mod.c
+	rm -f Module.symvers Module.markers module.order
 	rm -f -r .tmp_versions
 
 #------------------------------------------------------------------------------
