@@ -1,6 +1,4 @@
 #------------------------------------------------------------------------------
-# Copyright (C) Robin Callender
-#
 # Makefile for the osrfx2 driver program.
 #
 # To build the driver:  
@@ -27,14 +25,30 @@ obj-m      := osrfx2.o
 #------------------------------------------------------------------------------
 # Environmentals
 #------------------------------------------------------------------------------
+
+# [General]
 PWD         := $(shell pwd)
 VERSION      = $(shell uname -r)
 
+# [Build]
+# Comment/uncomment the following line to disable/enable debugging
+#DEBUG = y
+
+# Add your debugging flag (or not) to CFLAGS
+ifeq ($(DEBUG),y)
+  DEBFLAGS = -O -g -DSCULL_DEBUG # "-O" is needed to expand inlines
+else
+  DEBFLAGS = -O2
+endif
+
+EXTRA_CFLAGS += $(DEBFLAGS)
+
 KERNEL_DIR  ?= /lib/modules/$(VERSION)/build
 INCLUDE_DIR  = $(KERNELDIR)/include
+
+# [Install]
 INSTALL_DIR  = /lib/modules/$(VERSION)/kernel/drivers/usb/misc
 UDEV_DIR     = /etc/udev
-COLLISION    = osrfx2_collision
 
 #------------------------------------------------------------------------------
 # Build all components
@@ -52,10 +66,6 @@ clean:
 
 #------------------------------------------------------------------------------
 # Install components
-#
-# NOTE: There is a potential collision with usbtest and osrfx2 on their use 
-#       of Product_ID and Vendor_ID. The hack for this is to rename usbtest.
-#       Search /lib/modules/`uname -r`/modules.usbmap for colliding IDs.
 #------------------------------------------------------------------------------
 install:
 	-chmod 644 osrfx2.rules
@@ -63,7 +73,6 @@ install:
 	-ln -s $(UDEV_DIR)/osrfx2.rules $(UDEV_DIR)/rules.d/60-osrfx2.rules
 	-install -d $(INSTALL_DIR)
 	-install -c osrfx2.ko $(INSTALL_DIR)
-#	-mv $(INSTALL_DIR)/usbtest.ko $(INSTALL_DIR)/usbtest.ko.$(COLLISION)
 	-/sbin/depmod -r
 
 #------------------------------------------------------------------------------
@@ -75,13 +84,9 @@ refresh:
 
 #------------------------------------------------------------------------------
 # Uninstall components
-#
-# NOTE: See NOTE for install above. Upon uninstall the usbtest module will
-#       be rename back to its original name.
 #------------------------------------------------------------------------------
 uninstall:
 	-rm -f $(INSTALL_DIR)/osrfx2.ko
-#	-mv $(INSTALL_DIR)/usbtest.ko.$(COLLISION) $(INSTALL_DIR)/usbtest.ko
 	-rm -f $(UDEV_DIR)/rules.d/60-osrfx2.rules
 	-rm -f $(UDEV_DIR)/osrfx2.rules
 	-/sbin/depmod -r
