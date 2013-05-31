@@ -5,13 +5,17 @@
  modify it under the terms of the GNU General Public License as
  published by the Free Software Foundation, version 2.
 
- Step1, this step shows:
+ Step1, this is the most basic step. The source file contains absolutely 
+ minimal amount of code to get the driver loaded in memory and respond to 
+ PNP and Power events. You can install, uninstall, disable, enable, suspend 
+ and resume the system and everything will work fine.
+ In details, the step shows:
  1) how to create a simplest driver module for osrfx2, with 
- module's init and exit funtion so we can install and remove it.
+    module's init and exit funtion so we can install and remove it.
  2) how to export device info vid/pid to userspace so udev can bind&load the 
- driver when osrfx2 device is connected
+    driver when osrfx2 device is connected
  3) how to register the driver to usb core and two major callback functions 
- (probe & disconnect) are provoded with minimum stuff filled.
+    (probe & disconnect) are provoded with minimum stuff filled.
  */
 
 #include <linux/init.h>
