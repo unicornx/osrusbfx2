@@ -1,0 +1,8 @@
+#------------------------------------------------------------------------------
+#
+# osrfx2.rules - udev rules for the OSR USBFX2 Learning Kit device.
+#
+# see http://www.reactivated.net/writing_udev_rules.html for details.
+#------------------------------------------------------------------------------
+#
+BUS=="usb",DRIVER=="osrfx2",MODE="0666"

@@ -18,19 +18,13 @@
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Build object name
-#------------------------------------------------------------------------------
-obj-m      := osrfx2.o
-
-#------------------------------------------------------------------------------
 # Environmentals
 #------------------------------------------------------------------------------
 
-# [General]
 PWD         := $(shell pwd)
 VERSION      = $(shell uname -r)
+KERNEL_DIR  ?= /lib/modules/$(VERSION)/build
 
-# [Build]
 # Comment/uncomment the following line to disable/enable debugging
 #DEBUG = y
 
@@ -41,20 +35,27 @@ else
   DEBFLAGS = -O2
 endif
 
-EXTRA_CFLAGS += $(DEBFLAGS)
-
-KERNEL_DIR  ?= /lib/modules/$(VERSION)/build
-INCLUDE_DIR  = $(KERNELDIR)/include
-
-# [Install]
-INSTALL_DIR  = /lib/modules/$(VERSION)/kernel/drivers/usb/misc
-UDEV_DIR     = /etc/udev
+EXTRA_CFLAGS += $(DEBFLAGS) -I$(INCLUDE_DIR)
 
 #------------------------------------------------------------------------------
 # Build all components
 #------------------------------------------------------------------------------
-all:
-	$(MAKE) -C $(KERNEL_DIR) M=$(PWD)
+
+ifneq ($(KERNELRELEASE),)
+
+# call from kernel build system
+obj-m      := osrfx2.o
+
+else
+
+default:
+	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) INCLUDE_DIR=$(PWD)/../include modules
+
+endif
+
+# [Install]
+INSTALL_DIR  = /lib/modules/$(VERSION)/kernel/drivers/usb/misc
+UDEV_DIR     = /etc/udev
 
 #------------------------------------------------------------------------------
 # Delete build remenents

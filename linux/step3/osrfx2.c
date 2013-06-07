@@ -5,10 +5,9 @@
  modify it under the terms of the GNU General Public License as
  published by the Free Software Foundation, version 2.
 
- Step2, this step:
- 1) Creates a context for the osrfx2 device object.
- 2) Registers a usb interface and provide associated basic file operaitons
-    so that application can open the device.
+ Step3, this step:
+ 1) How to receive a request to show/set bar graph display.
+
  */
 
 #include <linux/init.h>
@@ -18,9 +17,7 @@
                             // removed since 2.6.39, 
                             // @http://kernelnewbies.org/BigKernelLock
 
-/* Define these values to match your devices */
-#define OSRFX2_VENDOR_ID	0x0547
-#define OSRFX2_PRODUCT_ID	0x1002
+#include "public.h"
 
 #define OSRFX2_DEVICE_MINOR_BASE   192
 
@@ -76,6 +73,132 @@ struct osrfx2 {
     
     struct kref            kref;      /* Refrence counter */
 };
+
+/**
+ * We choose use sysfs attribte to read/write io data.
+ * 
+ * This routine will retrieve the bargraph LED state, format it and return a
+ * representative string.                                                   
+ *                                                                         
+ * Note the two different function defintions depending on kernel version.  
+ */
+static ssize_t osrfx2_show_bargraph( struct device * dev, 
+                                     struct device_attribute * attr, 
+                                     char * buf )
+{
+    struct usb_interface  * intf   = to_usb_interface(dev);
+    struct osrfx2         * fx2dev = usb_get_intfdata(intf);
+//    struct bargraph_state * packet;
+    int retval;
+
+/*
+    packet = kmalloc(sizeof(*packet), GFP_KERNEL);
+    if (!packet) {
+        return -ENOMEM;
+    }
+    packet->BarsOctet = 0;
+*/
+    retval = usb_control_msg(fx2dev->udev, 
+                             usb_rcvctrlpipe(fx2dev->udev, 0), 
+                             OSRFX2_READ_BARGRAPH_DISPLAY, 
+                             USB_DIR_IN | USB_TYPE_VENDOR,
+                             0,
+                             0,
+                             packet, 
+                             sizeof(*packet),
+                             USB_CTRL_GET_TIMEOUT);
+
+    if (retval < 0) {
+        dev_err(&fx2dev->udev->dev, "%s - retval=%d\n", 
+                __FUNCTION__, retval);
+//        kfree(packet);
+        return retval;
+    }
+/*
+    retval = sprintf(buf, "%s%s%s%s%s%s%s%s",    /* bottom LED --> top LED */
+/*                     (packet->Bar1) ? "*" : ".",
+                     (packet->Bar2) ? "*" : ".",
+                     (packet->Bar3) ? "*" : ".",
+                     (packet->Bar4) ? "*" : ".",
+                     (packet->Bar5) ? "*" : ".",
+                     (packet->Bar6) ? "*" : ".",
+                     (packet->Bar7) ? "*" : ".",
+                     (packet->Bar8) ? "*" : "." );
+*/
+//    kfree(packet);
+
+    return retval;
+}
+
+/*
+ This routine will set the bargraph LEDs.
+
+ Note the two different function defintions depending on kernel version.
+ */
+static ssize_t set_bargraph(struct device * dev, 
+                            struct device_attribute * attr, 
+                            const char * buf,
+                            size_t count)
+{
+    struct usb_interface  * intf   = to_usb_interface(dev);
+    struct osrfx2         * fx2dev = usb_get_intfdata(intf);
+	unsigned char bargraph;
+    //struct bargraph_state * packet;
+
+    unsigned int value;
+    int retval;
+    char * end;
+
+/*    packet = kmalloc(sizeof(*packet), GFP_KERNEL);
+    if (!packet) {
+        return -ENOMEM;
+    }
+    packet->BarsOctet = 0;
+*/
+	bargraph = 0;
+/*
+    value = (simple_strtoul(buf, &end, 10) & 0xFF);
+    if (buf == end) {
+        value = 0;
+    }
+
+    packet->Bar1 = (value & 0x01) ? 1 : 0;
+    packet->Bar2 = (value & 0x02) ? 1 : 0;
+    packet->Bar3 = (value & 0x04) ? 1 : 0;
+    packet->Bar4 = (value & 0x08) ? 1 : 0;
+    packet->Bar5 = (value & 0x10) ? 1 : 0;
+    packet->Bar6 = (value & 0x20) ? 1 : 0;
+    packet->Bar7 = (value & 0x40) ? 1 : 0;
+    packet->Bar8 = (value & 0x80) ? 1 : 0;
+*/
+    retval = usb_control_msg(fx2dev->udev, 
+                             usb_sndctrlpipe(fx2dev->udev, 0), 
+                             OSRFX2_SET_BARGRAPH_DISPLAY, 
+                             USB_DIR_OUT | USB_TYPE_VENDOR,
+                             0,
+                             0,
+                             &bargraph, 
+                             sizeof(bargraph),
+                             USB_CTRL_GET_TIMEOUT);
+
+    if (retval < 0) {
+        dev_err(&fx2dev->udev->dev, "%s - retval=%d\n", 
+                __FUNCTION__, retval);
+    }
+    
+//    kfree(packet);
+
+    return count;
+}
+
+/*
+ This macro DEVICE_ATTR creates an attribute under the sysfs directory
+ ---  /sys/bus/usb/devices/<root_hub>-<hub>:1.0/bargraph
+
+ The DEVICE_ATTR() will create "dev_attr_bargraph".
+ "dev_attr_bargraph" is referenced in both probe and disconnect routines.
+ */
+static DEVICE_ATTR( bargraph, S_IRUGO | S_IWUGO, show_bargraph, set_bargraph );
 
 static struct usb_driver osrfx2_driver;
 

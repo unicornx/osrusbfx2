@@ -18,6 +18,10 @@ http://www.kroah.com/ - Greg Kroah-Hartman's homepage
 https://github.com/gregkh - Greg Kroah-Hartman's github
 
 #Chapter2:#
+
+Makefile的理解，参考http://www.ibm.com/developerworks/cn/linux/l-module26/
+
+
 对ubuntu下,按照书上的例子hello的说法会在终端显示“Hello, world”。但是运行后什么都没有出现的解释:
 
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

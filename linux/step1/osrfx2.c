@@ -22,9 +22,7 @@
 #include <linux/module.h>
 #include <linux/usb.h>
 
-/* Define these values to match your devices */
-#define OSRFX2_VENDOR_ID	0x0547
-#define OSRFX2_PRODUCT_ID	0x1002
+#include "public.h"
 
 /* 
  Table of devices that work with this driver.
@@ -64,13 +62,23 @@ static struct usb_device_id osrfx2_table [] = {
  */
 MODULE_DEVICE_TABLE (usb, osrfx2_table);
 
-static int osrfx2_probe(struct usb_interface *interface, const struct usb_device_id *id)
+/* 
+ The probe function is called when a device is installed that the USB core 
+ thinks this driver should handle; the probe function should perform checks 
+ on the information passed to it about the device and decide whether the 
+ driver is really appropriate for that device.
+ */
+static int osrfx2_probe ( struct usb_interface *interface, const struct usb_device_id *id )
 {
 	dev_info ( &interface->dev, "--> osrfx2_probe\n" );
 	return 0;
 }
 
-static void osrfx2_disconnect(struct usb_interface *interface)
+/*
+ The disconnect function is called when the driver should no longer control 
+ the device for some reason and can do clean-up.
+ */
+static void osrfx2_disconnect ( struct usb_interface *interface )
 {
 	dev_info ( &interface->dev, "--> osrfx2_disconnect\n" );
 }
