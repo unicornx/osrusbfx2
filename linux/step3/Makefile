@@ -20,7 +20,6 @@
 #------------------------------------------------------------------------------
 # Environmentals
 #------------------------------------------------------------------------------
-
 PWD         := $(shell pwd)
 VERSION      = $(shell uname -r)
 KERNEL_DIR  ?= /lib/modules/$(VERSION)/build
@@ -37,10 +36,13 @@ endif
 
 EXTRA_CFLAGS += $(DEBFLAGS) -I$(INCLUDE_DIR)
 
+# [for Install]
+INSTALL_DIR  = /lib/modules/$(VERSION)/kernel/drivers/usb/misc
+UDEV_DIR     = /etc/udev
+
 #------------------------------------------------------------------------------
 # Build all components
 #------------------------------------------------------------------------------
-
 ifneq ($(KERNELRELEASE),)
 
 # call from kernel build system
@@ -52,10 +54,6 @@ default:
 	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) INCLUDE_DIR=$(PWD)/../include modules
 
 endif
-
-# [Install]
-INSTALL_DIR  = /lib/modules/$(VERSION)/kernel/drivers/usb/misc
-UDEV_DIR     = /etc/udev
 
 #------------------------------------------------------------------------------
 # Delete build remenents
