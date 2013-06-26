@@ -15,25 +15,14 @@
 #define OSRFX2_VENDOR_ID	0x0547
 #define OSRFX2_PRODUCT_ID	0x1002
 
-/* Define the vendor commands supported by OSR USB FX2 device.               */
+/* Define the vendor commands supported by OSR USB FX2 device. */
+#define OSRFX2_READ_7SEGMENT_DISPLAY      0xD4
+#define OSRFX2_READ_SWITCHES              0xD6
 #define OSRFX2_READ_BARGRAPH_DISPLAY      0xD7
 #define OSRFX2_SET_BARGRAPH_DISPLAY       0xD8
-
-//
-// BAR_GRAPH_STATE
-//
-// BAR_GRAPH_STATE is a bit field structure with each
-//  bit corresponding to one of the bar graph on the 
-//  OSRFX2 Development Board
-//
-// Modified this structure to adpator to CY001
-// Refer to icd.h of osrfx2fw "LED Bar Graph" section
-// to get more details
-//
-#define BARGRAPH_ON  (unsigned char)0x80
-#define BARGRAPH_OFF (unsigned char)0x00
-
-#define BARGRAPH_MAXBAR (unsigned char)4 // CY001 only have 4 LED bars availabe
+#define OSRFX2_IS_HIGH_SPEED              0xD9
+#define OSRFX2_REENUMERATE                0xDA
+#define OSRFX2_SET_7SEGMENT_DISPLAY       0xDB
 
 /**
  * BARGRAPH_STATE is a bit field structure with each bit corresponding 
@@ -42,6 +31,11 @@
  * Modified this structure to adpator to CY001
  * Refer to icd.h of osrfx2fw "LED Bar Graph" section to get more details
  */
+#define BARGRAPH_ON  (unsigned char)0x80
+#define BARGRAPH_OFF (unsigned char)0x00
+
+#define BARGRAPH_MAXBAR (unsigned char)4 // CY001 only have 4 LED bars availabe
+
 struct bargraph_state {
     union {
         struct {

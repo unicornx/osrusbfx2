@@ -75,7 +75,8 @@ struct osrfx2 {
 };
 
 /**
- * We choose use sysfs attribte to read/write io data.
+ * We choose use sysfs attribte to read/write io data. More details please 
+ * refer to http://www.ibm.com/developerworks/cn/linux/l-cn-sysfs/#resources
  * 
  * This routine will retrieve the bargraph LED state, format it and return a
  * representative string.                                                   
@@ -88,16 +89,15 @@ static ssize_t osrfx2_show_bargraph( struct device * dev,
 {
     struct usb_interface  * intf   = to_usb_interface(dev);
     struct osrfx2         * fx2dev = usb_get_intfdata(intf);
-//    struct bargraph_state * packet;
+    struct bargraph_state * packet;
     int retval;
 
-/*
     packet = kmalloc(sizeof(*packet), GFP_KERNEL);
     if (!packet) {
         return -ENOMEM;
     }
     packet->BarsOctet = 0;
-*/
+
     retval = usb_control_msg(fx2dev->udev, 
                              usb_rcvctrlpipe(fx2dev->udev, 0), 
                              OSRFX2_READ_BARGRAPH_DISPLAY, 
@@ -111,12 +111,24 @@ static ssize_t osrfx2_show_bargraph( struct device * dev,
     if (retval < 0) {
         dev_err(&fx2dev->udev->dev, "%s - retval=%d\n", 
                 __FUNCTION__, retval);
-//        kfree(packet);
+        kfree(packet);
         return retval;
     }
+
 /*
+printf("Bar Graph: \n");
+        printf("    Bar8 is %s\n", barGraphState.Bar8 ? "ON" : "OFF");
+        printf("    Bar7 is %s\n", barGraphState.Bar7 ? "ON" : "OFF");
+        printf("    Bar6 is %s\n", barGraphState.Bar6 ? "ON" : "OFF");
+        printf("    Bar5 is %s\n", barGraphState.Bar5 ? "ON" : "OFF");
+        printf("    Bar4 is %s\n", barGraphState.Bar4 ? "ON" : "OFF");
+        printf("    Bar3 is %s\n", barGraphState.Bar3 ? "ON" : "OFF");
+        printf("    Bar2 is %s\n", barGraphState.Bar2 ? "ON" : "OFF");
+        printf("    Bar1 is %s\n", barGraphState.Bar1 ? "ON" : "OFF");
+*/
+   
     retval = sprintf(buf, "%s%s%s%s%s%s%s%s",    /* bottom LED --> top LED */
-/*                     (packet->Bar1) ? "*" : ".",
+                     (packet->Bar1) ? "*" : ".",
                      (packet->Bar2) ? "*" : ".",
                      (packet->Bar3) ? "*" : ".",
                      (packet->Bar4) ? "*" : ".",
@@ -124,8 +136,8 @@ static ssize_t osrfx2_show_bargraph( struct device * dev,
                      (packet->Bar6) ? "*" : ".",
                      (packet->Bar7) ? "*" : ".",
                      (packet->Bar8) ? "*" : "." );
-*/
-//    kfree(packet);
+
+    kfree(packet);
 
     return retval;
 }
@@ -135,28 +147,28 @@ static ssize_t osrfx2_show_bargraph( struct device * dev,
 
  Note the two different function defintions depending on kernel version.
  */
-static ssize_t set_bargraph(struct device * dev, 
-                            struct device_attribute * attr, 
-                            const char * buf,
-                            size_t count)
+static ssize_t osrfx2_set_bargraph( struct device * dev, 
+                                    struct device_attribute * attr, 
+                                    const char * buf,
+                                    size_t count )
 {
     struct usb_interface  * intf   = to_usb_interface(dev);
     struct osrfx2         * fx2dev = usb_get_intfdata(intf);
 	unsigned char bargraph;
-    //struct bargraph_state * packet;
+    struct bargraph_state * packet;
 
     unsigned int value;
     int retval;
     char * end;
 
-/*    packet = kmalloc(sizeof(*packet), GFP_KERNEL);
+    packet = kmalloc(sizeof(*packet), GFP_KERNEL);
     if (!packet) {
         return -ENOMEM;
     }
     packet->BarsOctet = 0;
-*/
+
 	bargraph = 0;
-/*
+
     value = (simple_strtoul(buf, &end, 10) & 0xFF);
     if (buf == end) {
         value = 0;
@@ -166,11 +178,11 @@ static ssize_t set_bargraph(struct device * dev,
     packet->Bar2 = (value & 0x02) ? 1 : 0;
     packet->Bar3 = (value & 0x04) ? 1 : 0;
     packet->Bar4 = (value & 0x08) ? 1 : 0;
-    packet->Bar5 = (value & 0x10) ? 1 : 0;
-    packet->Bar6 = (value & 0x20) ? 1 : 0;
-    packet->Bar7 = (value & 0x40) ? 1 : 0;
+//    packet->Bar5 = (value & 0x10) ? 1 : 0;
+//    packet->Bar6 = (value & 0x20) ? 1 : 0;
+//    packet->Bar7 = (value & 0x40) ? 1 : 0;
     packet->Bar8 = (value & 0x80) ? 1 : 0;
-*/
+
     retval = usb_control_msg(fx2dev->udev, 
                              usb_sndctrlpipe(fx2dev->udev, 0), 
                              OSRFX2_SET_BARGRAPH_DISPLAY, 
@@ -186,7 +198,7 @@ static ssize_t set_bargraph(struct device * dev,
                 __FUNCTION__, retval);
     }
     
-//    kfree(packet);
+    kfree(packet);
 
     return count;
 }
@@ -196,9 +208,10 @@ static ssize_t set_bargraph(struct device * dev,
  ---  /sys/bus/usb/devices/<root_hub>-<hub>:1.0/bargraph
 
  The DEVICE_ATTR() will create "dev_attr_bargraph".
- "dev_attr_bargraph" is referenced in both probe and disconnect routines.
+ "dev_attr_bargraph" is referenced in both probe (create the attribute) and 
+ disconnect (remove the attribute) routines.
  */
-static DEVICE_ATTR( bargraph, S_IRUGO | S_IWUGO, show_bargraph, set_bargraph );
+static DEVICE_ATTR( bargraph, S_IRUGO | S_IWUGO, osrfx2_show_bargraph, osrfx2_set_bargraph );
 
 static struct usb_driver osrfx2_driver;
 
@@ -373,6 +386,11 @@ static int osrfx2_probe ( struct usb_interface *interface, const struct usb_devi
 	*/
 	usb_set_intfdata ( interface, dev );
 
+    /* create bargraph attribute under the sysfs directory
+       ---  /sys/bus/usb/devices/<root_hub>-<hub>:1.0/bargraph
+    */
+    device_create_file(&interface->dev, &dev_attr_bargraph);
+
 	/* we can register the device now, as it is ready 
 
 	   On Linux, there are two reserved major ids for USB, (include/linux/usb.h)
@@ -430,6 +448,9 @@ static void osrfx2_disconnect ( struct usb_interface *interface )
 	dev = usb_get_intfdata ( interface );
 	usb_set_intfdata ( interface, NULL );
 
+	/* remove bargraph attribute from the sysfs */
+    device_remove_file(&interface->dev, &dev_attr_bargraph);
+    
 	/* give back our minor */
 	usb_deregister_dev ( interface, &osrfx2_class );
 

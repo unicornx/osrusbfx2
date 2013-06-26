@@ -326,6 +326,11 @@ int usb_unlink_urb(struct urb *urb);###异步###通知Core停止一个未完成�
 
 #Chapter14 设备模型
 
+参考文献：
+使用 /sys 文件系统访问 Linux 内核：http://www.ibm.com/developerworks/cn/linux/l-cn-sysfs/
+里面详细介绍了DEVICE_ATTR的使用
+
+
 ##Kernel 2.6实现热插拔的原理说明
 
 ###参考文献
