@@ -15,6 +15,7 @@ Author         Date       Tracking Number  Description of Change
 --------------+----------+---------------+--------------------------------------
 unicornx       June/2012  N/A             Initial version
 unicornx       Mar/2013   N/A             Changed definition for Bar Graph
+unicornx       June/2013  N/A             Added comments for Bar Graph
 
 -----------------------------------------------------------------------------*/
 #ifndef _ICD_H //Header entry
@@ -49,9 +50,13 @@ unicornx       Mar/2013   N/A             Changed definition for Bar Graph
 
  Note: this definition is a bit differnet against OSRFX2. OSRFX2 uses 8 bit to
  represent 8 LED bars, for every bit, 1 means switch on the bar, 0 means switch off it.
- For CY001, we use bit 0 ~ 3 to flag which bar would be affected, and use bit 7 to
- flag the operation type - off or on.
-
+ This makes the osrusbfx2 sample - osrusbfx2.exe - have to read current bar status before 
+ setting new value to not affect other existing bars' state. Refer to original sample
+ code in testapp.c, function - PlayWithDevice() for the case CLEAR_ONE_BAR.
+ For CY001, due to we only have 4 bars and to improve above usage, we use bit 0 ~ 3 
+ to flag which bar would be affected, and use bit 7 to flag the operation type - off or on.
+ This means we can directly indicate specific bar to turn it on or off without haveing to
+ query others.
  -----------------------------------------------------------------------------*/
 #define BARGRAPH_ON  0x80
 #define BARGRAPH_OFF 0x00
