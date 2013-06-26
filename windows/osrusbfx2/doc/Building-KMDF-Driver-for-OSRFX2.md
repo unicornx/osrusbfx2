@@ -107,7 +107,7 @@
 4. **驱动**，如果驱动可以处理I/O请求，则执行路径到此结束，否则驱动将I/O请求继续发送给设备。注意在WDF架构里驱动并不会直接和设备打交道，而是要通过内核子系统。我们这里的图只是给出了分层的概念。  
 5. **物理设备**，I/O请求最后的执行者。
 
-![Windows系统架构](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/DDMWDF-2-1.PNG)
+![Windows系统架构](./images/DDMWDF-2-1.PNG)
 
 <a name="1.1.2" id="1.1.2"></a>
 ### 1.1.2. 设备对象和设备栈
@@ -115,11 +115,10 @@
 
 在Windows系统中，一个物理设备要正常工作，往往需要多个驱动的支持。PnP管理器检测到一个物理设备连接到系统总线后，从枚举设备的总线驱动开始，先创建最底层的物理设备对象（Physical Device Object，简称PDO），然后在系统中按照栈的形式从下到上调用对应驱动的AddDevice，为每一个驱动对应地创建一个设备对象。所以除了极少情况（Raw Mode）每一个设备栈都至少包括一个PDO，一个FDO以及零个或多个Filter DO,见下图。详细的过程描述可以参考[When Are WDM Device Objects Created]。
 
-![Device-Stack](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/DevStack.png)
-
+![Device-Stack](./images/DevStack.png)  
 设备栈建立好之后，当I/O管理器从应用程序收到一个I/O请求时，会按照这个栈的顺序将I/O请求依次向下转发给各级设备对象，直到在某一层被处理结束。设备对象作为I/O管理器和驱动程序之间的代理，其数据结构中包含了驱动注册的回调函数指针集合。I/O管理器通过这些回调函数和我们的驱动交互，调用我们驱动实现的功能函数。  
 考虑到一台PC同时可能会处理多个相同的设备，所以我们的驱动代码要考虑同时支持多个设备栈。但每个设备栈只对应着连在系统上的一个物理设备。  
-![设备对象和设备栈](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/DDMWDF-2-2.PNG)
+![设备对象和设备栈](./images/DDMWDF-2-2.PNG)
 
 有关设备栈的更详细的描述可以参考[device stack]。
 
@@ -132,10 +131,10 @@ PnP管理器为每个设备栈在内存中保存了一份拷贝，除了设备�
 一个设备节点只能表达一个总线上的一个设备的信息。而从系统的角度来看，整个系统里往往由多层总线叠加组成。所以多层总线以及每层总线上的多个设备就构成了一棵多个设备节点构成的大树。这棵树的信息由PnP管理器维护。有关设备树的更详细的描述可以参考[Device Tree]。
 
 查看设备树除了用WinDbg，其实粗略地用设备管理器也可以看个大概，下图就是在一台XP电脑上从Root节点到OSRFX2设备的例子。从根节点“PC-201212181552”开始一路向下直到“WDF Sample Driver for OSR USB-FX2 Learning Kit”，每一个节点(红色方框标出)都对应着一个设备栈：  
-![设备树OSRFX2](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/DevTree-osrfx2.PNG)  
+![设备树OSRFX2](./images/DevTree-osrfx2.PNG)  
 
 对于OSRFX2设备“WDF Sample Driver for OSR USB-FX2 Learning Kit”, 其对应的设备栈示意图应该如下,其中PDO由USB Root Hub对应的Windows自带的usbhub.sys驱动创建，而FDO由osrusbfx2.sys驱动负责创建：  
-![设备对象和设备栈OSRFX2](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/DevStack-osrfx2.PNG)
+![设备对象和设备栈OSRFX2](./images/DevStack-osrfx2.PNG)
 
 <a name="1.2" id="1.2"></a>
 ### 1.2. WDF简介
@@ -150,7 +149,7 @@ WDF为各种各样的设备类型抽象了一个统一的驱动模型，这个�
 - **PnP/Power模型(PnP/Power Model)**  
 
 之所以称其为统一，还有一方面的意思是，如果我们基于WDF来开发驱动，那么规范是已经定义好的，所有的WDF驱动都要在这个框架下根据WDF定义的接口和行为操作，否则就不能享受WDF给我们带来的福利。  
-![WDF模型](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/ObjectModel.PNG)
+![WDF模型](./images/ObjectModel.PNG)
 
 <a name="1.2.1" id="1.2.1"></a>
 #### 1.2.1. 设计良好的对象模型
@@ -601,7 +600,7 @@ Windows软件跟踪预处理器([Windows software trace PreProcessor])，简称W
 1. WPP提供了一套动态和灵活的控制机制，可以实时地打开或者关闭跟踪；可以选择性地设置日志的级别并选择全部或者部分进行跟踪；可以在一个会话中选择跟踪多个不同来源的日志，比如同时跟踪我们的驱动和操作系统的日志，并同时查看我们驱动的日志和系统日志发生的事件的时间顺序，来供我们了解整体发生的情况并做出更好的判断。  
 2. 可以实时查看，还可以同时记录在本地磁盘文件。在SDK中，Windows缺省提供了一套可用于进行实时查看和记录日志的软件。我们这里以[TraceView]为例介绍下面的内容，TraceView是有图形界面的，当然还有其他基于命令行的工具。微软甚至提供了一套库和API可以允许程序员开发和定制自己的系统日志跟踪工具。  
 3. WPP的跟踪消息富含大量有用的信息，WPP的预处理器在编译时还会在我们的跟踪日志上帮助我们加上日志发生点的函数名，文件名和行号，以及时间戳。参见下图，在TraceView的界面上我们可以选择日志中显示那些列信息，其中就包括方才我说的内容。TraceView上还可以看到内核的一些信息，包括当前代码在哪个CPU上执行（列“CPU#”）等等，我的这台PC是双核的，所以有0和1两个CPU代号。  
-![WPP的日志](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/TraceView.PNG)  
+![WPP的日志](./images/TraceView.PNG)  
 4. 采用WPP的机制还可以在让用户提供日志记录时避免泄露不想让别人看到的信息。因为WPP产生的日志文件(etl)文件是二进制格式的，需要和跟踪格式模板文件（Trace Format File，tmf文件）配合起来才能解释成人可以读懂的文本，而TMF文件只保存在驱动开发人员的手里，所以采用WPP机制产生的日志具有一定的私密性。  
 5. 我们可以在调试版本(checked)和发布版本(free)中都包含WPP日志。这点对于驱动开发人员离线支持很有帮助。当用户反映有问题而我们一时不能到现场支持，一般需要用户帮助我们复现抓日志。用户使用的都是发布版本，所以我们不用让他们替换成调试版本就可以直接尝试复现了。此时大家可能会担心如果我们跟踪日志加得太多，对运行在内核的驱动的性能是否有影响。这点我们大可放心，因为WPP的日志跟踪代码只会在WPP的跟踪控制器，比如TraceView这类跟踪软件运行时内部的跟踪开关才会被打开，我们的日志代码才会被执行到，平时运行时是不会被执行到的，所以极大地提高了效率。即使跟踪打开时，由于WPP的日志是以二进制方式产生的，只有在查看时才会通过解释器被解释为文本，所以消耗的CPU量很小，这点比直接调用DbgPring(类似于App里的printf)直接打印日志文本效率要高很多，所以WPP方式对于我们调试跟踪一些和时间性紧密相关的问题非常有用。
 6. 如果你原来的驱动代码中的跟踪日志是用DbgPrint等实现的，利用WPP提供的机制也可以很方便地移植到WPP上来。
@@ -753,7 +752,7 @@ WPP要求驱动显式地调用`WPP_CLEANUP`宏停止WPP软件日志跟踪。一�
 异步方式则是以异步参数FILE_FLAG_OVERLAPPED打开（[CreateFile]）设备文件，然后调用系统读写API的时候传入OVERLAPPED参数，此时系统不会阻塞API，而是立即返回。那么调用者可以在某个时刻通过WaitForSingleObject等函数来等待中的hEvent来等待操作完成 （可能已经完成）进行同步，当操作完成以后，可以调用GetOverlappedResult者获得操作的结果，比如是否成功，读取了多少字节等等。这里 的发起者就是应用程序，而执行者就是操作系统本身，至于执行者是怎么执行的，我们会在后面的篇幅讨论。而两者的同步就是通过一个Windows Event来完成。
 
 同步方式没什么好说的，因为系统内核在API层别就帮助我们实现了阻塞同步，所以整个系统里同时只会有一个I/O请求。驱动里对读写的串行化实际已经没有什么必要了。但这么做是以牺牲效率为代价的。让我们再来仔细看一下OSRFX2设备的EP6（OUT）和EP8（IN）的端点能力，参考下图。EP6和EP8都是双缓存，考虑到芯片固件内部从EP6往EP8搬运数据的速度极快，从整体上可以认为对这两个端点的写和读是全双工的。也就是说如果EP8上有数据，即使主机往EP6上写数据的操作还没有完成（进行中），主机也可以立即从EP8上读数据。那么我们在应用层读数据的时候就没有必要一定要等待写数据完成才开始。只要设备有这个能力，我们就要充分发挥它，否则就是浪费，不是吗？  
-![OSRFX2 EP6&EP8](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/osrfx2-bulkep.PNG)  
+![OSRFX2 EP6&EP8](./images/osrfx2-bulkep.PNG)  
 
 看了一下osrusbfx2.exe的异步读写的函数AsyncIo，其目的是要采用异步的方式进行100对读写(`NUM_ASYNCH_IO`)。有意思的是这里采用的异步模型并不是典型的WaitForSingleObject，而是采用了[I/O Completion Ports]。据说这是一种Windows特有的适合更高效的I/O读写模型。其本质是在Windows内核的帮助下提供了称之为[I/O Completion Ports]的控制点，这是一种内核对象。围绕这个内核对象，每一个I/O Completion Port都会维护一个针对设备的I/O请求队列（注意这个队列和WDF的FrameWork和我们驱动内创建的队列是两码事），应用程序要做的事情包括两方面：第一，保证对I/O的系统调用采用异步方式，否则就称不上是异步的模型了；第二，围绕I/O Completion Port，注册适当个数的工作线程，注意在[I/O Completion Ports]架构下，工作线程的数目用不着太多，如果还是抱着老思想为每一个读写都创建一个工作线程，那是走了回头路。[I/O Completion Ports]的一个很重要的思想就是用尽可能少的线程来做最有效率的事情，避免整个系统在大量的线程面前浪费有限的资源，包括切换线程上下文的CPU时间和为每个线程控制体保留的内存。在osrusbfx2.exe里我们可以看到它只启动了两个线程，一个读线程和一个写线程，每个线程关联了一个自己的I/O Completion Port。每个线程先一次性将100个读请求或者100个写请求全部提交给系统，然后就等待自己的I/O Completion Port在I/O请求完成时通知它，再进行下一轮处理。注意到驱动内部实际上会将所有的读和写请求进入串行队列逐个处理，但因为设备可以支持读写同时发生，所以理论上读写在自己的线程里会并行动作，这样效率比同步会有很大的提高。更多的有关I/O Completion Port的介绍可以参考[I/O Completion Port(I/O完成对象)的原理与实现]。
 
@@ -809,9 +808,9 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
         WdfDeviceSetPnpCapabilities(device, &pnpCaps);
 
     其中OSRUSBFX2设置了`WDF_DEVICE_PNP_CAPABILITIES`的SurpriseRemovalOK属性为WdfTrue，这表明用户可以直接将OSRFX2设备直接从PC上拔出而不用使用系统的“安全删除硬件”向导程序。反之如果我们不设置SurpriseRemovalOK为WdfTrue，则表明我们的驱动希望用户采用系统的“安全删除硬件”向导程序来移除我们的设备，这通常发生在一些类似U盘的设备上，而且在这种情况下插上设备，在Windows的右下角托盘上会出现“安全删除硬件”的小图标。  
-    ![safely-remove-icon](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/safelyremove-icon.PNG)  
+    ![safely-remove-icon](./images/safelyremove-icon.PNG)  
     双击后还会出现“安全删除硬件”的对话框。  
-    ![safely-remove-icon](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/safelyremove-dialogbox.PNG)  
+    ![safely-remove-icon](./images/safelyremove-dialogbox.PNG)  
     我们可以尝试删除`pnpCaps.SurpriseRemovalOK = WdfTrue;`看看效果。
 
 5. 功能驱动程序可以通过调用WdfDeviceSetPowerCapabilities，将设备的电源能力报告给操作系统。具体有关电源能力的介绍参考3.2.3.1-电源状态。
@@ -844,7 +843,7 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 系统电源状态以S开头，从S0到Sx （x为1,2,3,4,5）,S0代表系统正常工作时的电源状态，而S1到S4表示的是系统的可睡眠电源状态（[System Sleeping States]），耗电量从1到4依次递减，S5代表关机(off)。需要注意的是S5和其他的Sx（S1，S2，S3，S4）还是有区别的，S5表示系统完全断电，而在S1和S4下虽然系统已经停止了计算并进入睡眠但电脑设备还上着电，随时可以不用重启操作系统而恢复到工作状态。
 
 设备电源状态以D开头，从D0到Dx（x为1,2,3），D0表示设备满负荷正常工作状态，Dx表示设备的低功耗（low-power）电源状态（[Device Low-Power States]），耗电量从1到3依次递减。所有的设备都必须支持D0和D3，但对已D1和D2并非所有设备都会支持，实际上大部分设备只支持D0和D3，OSRFX2也是一样。要注意的是对于USB设备，D3表示最低能耗状态并且有D3hot和D3cold之分，我们可以认为D3cold几乎就是设备不工作了，因为此时在总线上已经无法检测到其存在，而D3hot还是可以检测到的。要查看设备电源状态，可以到设备管理器中，找到设备后右键点击“属性”，在弹出的属性页中选择“详细信息”后在下拉列表中可以找到“当前电源状态”项，如下图。不过奇怪的是我发现该值并不会随设备的实际值变化，难道是微软的一个bug？;)  
-![powerstate](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/powerstate.PNG)  
+![powerstate](./images/powerstate.PNG)  
 
 对设备来说可以从D0直接迁移为任何Dx状态，也可以从Dx直接迁移为D0，但不可以在Dx之间直接迁移状态，简单来说，如果要从D1迁移到D3，则设备首先要从D1迁移到D0，也就是上电进入正常工作模式，然后再从D0迁移到D3。。原因很简单：在休眠甚至断电状态下访问、改变硬件配置是被禁止的，必须先回到工作状态D0方可。
 
@@ -894,7 +893,7 @@ OSRUSBFX2在创建框架设备对象时重点添加了以下和支持PnP以及Po
 WDF并没有提供专门的读取PowerCapability的API，但我们总是可以自己构造`IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES`来读取，可惜我目前还没有试过，但我们可以通过Windows在设备管理器里对用户提供一些GUI接口来得到部分信息，同时我们还可以做些小实验并看一下驱动的日志来验证一下。
 
 先来介绍一下我们的小实验。实验有两个，是在两台不同的电脑主机上做的，第一个是在主机A上做的，注意到其主机待机电源状态为S1，对应的设备最高电源状态为D3。日志见下图：  
-![state-transfer](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/state-transfer-hostA.PNG)  
+![state-transfer](./images/state-transfer-hostA.PNG)  
 我们可以看到日志主要分以下六个阶段：  
 
 - Step1：Sequence#  1~14，设备上电一直到进入工作状态D0。  
@@ -907,7 +906,7 @@ WDF并没有提供专门的读取PowerCapability的API，但我们总是可以�
 - Step8：Sequence# 29~33，将设备从主机拔除，设备先恢复进入D0，再进入D3Final。
 
 第二个实验是在主机B上做的，注意到其主机待机电源状态为S1，对应的设备最高电源状态为D2。日志见下图：  
-![state-transfer](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/state-transfer-hostB-Wakeup.PNG)  
+![state-transfer](./images/state-transfer-hostB-Wakeup.PNG)  
 
 - Step1：Sequence#  1~ 4，按设备板子的”WAKEUP“按钮，设备从节电模式D2返回D0，过10秒钟后总线空闲又自动进入节点睡眠模式D2。  
 - Step2：Sequence#  5~ 8，主机空闲进入待机（Standby）状态，设备也被迫进入低功耗状态D2，注意设备的Power状态要恢复D0，然后再进入D2。  
@@ -916,16 +915,16 @@ WDF并没有提供专门的读取PowerCapability的API，但我们总是可以�
 现在来看一下OSRUSBFX2的电源能力，结合前面介绍的`WDF_DEVICE_POWER_CAPABILITIES`数据结构中的七大项，应该满足如下：
 
 - 第一项，设备支持的D值范围：可以通过设备管理器，找到设备后右键点击“属性”，在弹出的属性页中选择“详细信息”后在下拉列表中可以找到“电容量”项（:-)天知道MS怎么会这么翻译，看看英文版的WindowsXP，明明是“Power Capabilities”）。  
-![power-capabilities](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/power-capabilities.PNG)  
+![power-capabilities](./images/power-capabilities.PNG)  
 可见除了D0和D3外，还支持D1和D2。从我们的实验中可以看到设备空闲节电后会进入D2，但如何进入D1还不是很清楚。该值在主机A和主机B上是一致的。  
 *注：在Windows7上所有和电源能力相关的都被移到了“电源数据”一项。*  
 
 - 第二项，设备进入休眠状态后，可被唤醒的D值范围：同第一项，见上图，说明设备进入休眠后，在D0，D1和D2下都可以唤醒，但无法从D3下被唤醒。从实验一的Step3和Step5可以验证设备在D2下可以被唤醒，但在D3下不行。该值在主机A和主机B上是一致的。  
 
 - 第三项，电源状态映射表：我们可以通过设备管理器，找到设备后右键点击“属性”，在弹出的属性页中选择“详细信息”后在下拉列表中可以找到“电源状态映射”项。在主机A上如下图所示：  
-    ![powerstate-mapping](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/powerstate-mapping-hostA.PNG)  
+    ![powerstate-mapping](./images/powerstate-mapping-hostA.PNG)  
 可见对主机A，S0状态映射到设备的D0状态——S0映射到所有设备的D0状态；其他的系统状态都映射到D3。这表明当系统进入S0工作状态的时候，有能力为OSRFX2提供最大电源供应（D0）；当系统离开S0状态（S1到S5）时，设备从系统获取到的电源只够其维持在D3状态。我们说过对OSRFX2这种USB设备，电源能力值是由挂接该设备的USB的RootHub决定，所以换一台不同型号的电脑取值就有可能不同。下表是主机B上读到的值，注意到这台电脑的DeviceState[PowerSystemSleeping1]的值和前面一台电脑上读到的就不同-用红色方框标出。这些不同导致了同样的设备在睡眠和唤醒时的行为发生差异。主机A的Step5里设备就无法进行远程唤醒而同样的设备在主机B上就可以。   
-    ![powerstate-mapping](https://github.com/unicornx/osrusbfx2/raw/master/windows/osrusbfx2/doc/images/powerstate-mapping-hostB.PNG)  
+    ![powerstate-mapping](./images/powerstate-mapping-hostB.PNG)  
 
 - 第四项，设备侧最低的可以发送唤醒系统信号的电源状态值：没有GUI信息，需要用`IRP_MJ_PNP/IRP_MN_QUERY_CAPABILITIES`实际读一下。感觉这个值会随不同主机的总线能力不同而不同。譬如对主机A，该值必定在D3以上，因为实验一的Step5里，设备随主机睡眠后进入D3，我们按压板子的"WAKEUP"按钮无法使LED数字显示从“S”变为“A”，说明OSRFX2的固件代码中TD_Resume函数没有被调用到，唯一的原因是此时主机侧总线驱动下发了请求将设备的RemoteWakeup的功能给关闭了。而对于主机B，该值应该至少是D2，因为从实验二的Step3我们可以看到可以由设备发起RemoteWakeup。
 
