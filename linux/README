@@ -62,6 +62,7 @@ for Fedora Core 5
     robin@vmUbuntu:~/osrfx2/Linux/driver$ gedit osrfx2.c &
     robin@vmUbuntu:~/osrfx2/Linux/driver$ make 
     robin@vmUbuntu:~/osrfx2/Linux/driver$ sudo make refresh
+    robin@vmUbuntu:~/osrfx2/Linux/driver$ sudo dmesg -c // to cleanup the log
     robin@vmUbuntu:~/osrfx2/Linux/driver$ # plug device into USB port and test
     
 //-----------------------------------------------------------------------------

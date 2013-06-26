@@ -1,7 +1,9 @@
 学习笔记 ldd3
 
 LDD3 on line doc @ http://lwn.net/Kernel/LDD3/  
-一个中文版的 @ http://oss.org.cn/kernel-book/ldd3/
+一个中文版的 @ http://oss.org.cn/kernel-book/ldd3/  
+a project on git to track the latest kernel for the ldd3 example: https://github.com/martinezjavier/ldd3 - maybe having this I can ignore my ldd3 example maintain work :$  
+git clone git://github.com/martinezjavier/ldd3.git
 
 Linux Kernel Source on line @ http://lxr.free-electrons.com/ident
 LXR @ China: http://lxr.oss.org.cn/
@@ -16,6 +18,10 @@ http://www.kroah.com/ - Greg Kroah-Hartman's homepage
 https://github.com/gregkh - Greg Kroah-Hartman's github
 
 #Chapter2:#
+
+Makefile的理解，参考http://www.ibm.com/developerworks/cn/linux/l-module26/
+
+
 对ubuntu下,按照书上的例子hello的说法会在终端显示“Hello, world”。但是运行后什么都没有出现的解释:
 
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -319,6 +325,11 @@ int usb_unlink_urb(struct urb *urb);###异步###通知Core停止一个未完成�
 
 
 #Chapter14 设备模型
+
+参考文献：
+使用 /sys 文件系统访问 Linux 内核：http://www.ibm.com/developerworks/cn/linux/l-cn-sysfs/
+里面详细介绍了DEVICE_ATTR的使用
+
 
 ##Kernel 2.6实现热插拔的原理说明
 
