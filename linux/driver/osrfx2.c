@@ -9,6 +9,13 @@
 /*                                                                           */
 /*****************************************************************************/
 
+/*
+Revision History
+
+unicornx, May/27/2013, to pass building on 2.6.32
+
+*/
+
 #include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/errno.h>
@@ -19,6 +26,9 @@
 #include <linux/poll.h>
 #include <asm/uaccess.h>
 #include <linux/usb.h>
+#include <linux/smp_lock.h> // for lock_kernel/unlock_kernel, notice BKL was
+                            // removed since 2.6.39, 
+                            // @http://kernelnewbies.org/BigKernelLock
 
 /*****************************************************************************/
 /* Define the vendor id and product id.                                      */
