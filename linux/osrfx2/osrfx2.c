@@ -41,7 +41,7 @@ static char * getBargraphDisplay( void )
         return NULL;
 
     count = read( fd, &attrvalue, sizeof(attrvalue) );
-     close(fd);
+    close(fd);
     if (count == 8) { 
         return strdup(attrvalue);
     }

@@ -1,9 +1,10 @@
 #------------------------------------------------------------------------------
 # Makefile for the osrfx2 test program.
 #------------------------------------------------------------------------------
-
+PWD    := $(shell pwd)
+INCLUDE_DIR=$(PWD)/../include
 CC      = gcc
-CFLAGS  = -g -O2 -Wall
+CFLAGS  = -g -O2 -Wall -I$(INCLUDE_DIR)
 
 OBJS    = osrfx2.o
 

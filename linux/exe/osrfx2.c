@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <sys/poll.h>
 
+#include "public.h"
 
 /* It's better to define a max length for myself instead of system defined.
    Refer to http://stackoverflow.com/questions/833291/is-there-an-equivalent-to-winapis-max-path-under-linux-unix
@@ -57,8 +58,25 @@ int G_ReadLen = 512;          // #bytes to read
 char * gDevname = NULL;
 char * gSyspath = NULL;
 
+typedef enum _INPUT_FUNCTION {
+    LIGHT_ONE_BAR = 1,
+    CLEAR_ONE_BAR,
+    LIGHT_ALL_BARS,
+    CLEAR_ALL_BARS,
+    GET_BAR_GRAPH_LIGHT_STATE,
+    GET_MOUSE_POSITION,
+    GET_MOUSE_POSITION_AS_INTERRUPT_MESSAGE,
+    GET_7_SEGEMENT_STATE,
+    SET_7_SEGEMENT_STATE,
+    RESET_DEVICE,
+    REENUMERATE_DEVICE,
+    GET_DEV_INFO,
+} INPUT_FUNCTION;
 
-static void getDevicePath( void )
+/*
+ Retrun 0, OK, else failed
+*/
+static int getDevicePath ( void )
 {
 	char * devname;
 	char   devpath [MAX_DEVPATH_LENGTH];
@@ -70,31 +88,26 @@ static void getDevicePath( void )
 
 	if( access( devpath, F_OK ) == -1 ) {
     	fprintf ( stderr, "Can't find %s device\n", devpath );
+    	return -1;
 	}
 	
 	snprintf(syspath, sizeof(syspath), "/sys/class/usb/%s/device", devname);
 	
 	gSyspath = strdup(syspath);
-}
 
-void printUsage()
+	return 0;
+}
 
 /*++
 Routine Description:
-
     Called by main() to dump usage info to the console when
     the app is called with no parms or with an invalid parm
-
 Arguments:
-
     None
-
 Return Value:
-
     None
-
 --*/
-
+void printUsage()
 {
     printf("Usage for osrusbfx2 testapp:\n");
     printf("-r [n] where n is number of bytes to read\n");
@@ -108,26 +121,16 @@ Return Value:
     return;
 }
 
-
-int parseArg( int argc, char** argv )
-
 /*++
 Routine Description:
-
     Called by main() to parse command line parms
-
 Arguments:
-
     argc and argv that was passed to main()
-
 Return Value:
-
-    Sets global flags as per user function request
-
-    
-
+	1, parse OK, 0, parse failed
+    When parse OK, sets global flags as per user function request
 --*/
-
+int parseArg( int argc, char** argv )
 {
     int ch;
     opterr=0;
@@ -230,7 +233,7 @@ static char * getBargraphDisplay( void )
 {
     int    fd;
     int    count;
-    char   attrname [256];
+    char   attrname [MAX_DEVPATH_LENGTH];
     char   attrvalue [32];
 
     snprintf(attrname, sizeof(attrname), "%s/bargraph", gSyspath);
@@ -239,8 +242,10 @@ static char * getBargraphDisplay( void )
     if (fd == -1)  
         return NULL;
 
+	memset ( attrvalue, 0x00, 32 );
     count = read( fd, &attrvalue, sizeof(attrvalue) );
-     close(fd);
+    close(fd);
+
     if (count == 8) { 
         return strdup(attrvalue);
     }
@@ -255,7 +260,7 @@ static int setBargraphDisplay( unsigned char value )
     int    fd;
     int    count;
     int    len;
-    char   attrname [256];
+    char   attrname [MAX_DEVPATH_LENGTH];
     char   attrvalue [32];
 
     snprintf(attrname, sizeof(attrname), "%s/bargraph", gSyspath);
@@ -274,6 +279,7 @@ static int setBargraphDisplay( unsigned char value )
     return 0;
 }
 
+#if 0
 /*---------------------------------------------------------------------------*/
 /*                                                                           */
 /*---------------------------------------------------------------------------*/
@@ -385,99 +391,107 @@ static int waitForSwitchEvent( void )
     close(pollfds.fd);
     return -1;
 }
+#endif
 
-
-/*---------------------------------------------------------------------------*/
-/*                                                                           */
-/*---------------------------------------------------------------------------*/
-int main(int argc, char ** argv)
+void PlayWithDevice ()
 {
-    extern char * optarg;
-    extern int    optind;
-    int           ch;
-    int           retval = -1;
-
-	if ( 0 == parseArg ( argc, argv ) ) return -1;
-    /* 
-     *   Capture any command-line args.
-     */
-/*     
-    while ((ch = getopt(argc, argv, "d:h")) != -1) {
-        switch (ch) {
-        case 'd':
-            gDevname = strdup(optarg);
-            break;
-        case 'h':
-        default:
-            fprintf(stderr, "Usage:\n" );
-            fprintf(stderr, "   -d: device name to use: osrfx2_[0-9]\n");
-            goto done;
-        }
-    }
-*/
-	/* 
-     *  Get the path to osrfx2's sysfs attributes.
-	 */
-#if 0	 
-    get_osrfx2_syspath();
-    if (gSyspath == NULL) {
-        goto done;
-    }
+    int function;
+	int bar;
+	unsigned char barValue;
 
     /*
-     *  Enter command processing loop
+     * Infinitely print out the list of choices, ask for input, process
+     * the request.
      */
-    for (;;) {
+    while ( 1 ) {
 
-        int selection;
-        unsigned char i;
-
-        printf ("\nOSRFX2 -- Functions:\n\n");
-        printf ("\t1.  Light bars\n");
-        printf ("\t2.  Light entire bar graph\n");
-        printf ("\t3.  Clear entire bar graph\n");
-        printf ("\t4.  Get bar graph state\n");
-        printf ("\t5.  Get switch state\n");
-        printf ("\t6.  Get switch interrupt message\n");
-        printf ("\t7.  Get 7-segment display\n");
-        printf ("\t8.  Set 7-segment display\n");
+		printf ("\nUSBFX TEST -- Functions:\n\n");
+        printf ("\t1.  Light Bar\n");
+        printf ("\t2.  Clear Bar\n");
+        printf ("\t3.  Light entire Bar graph\n");
+        printf ("\t4.  Clear entire Bar graph\n");
+        printf ("\t5.  Get bar graph state\n");
+        printf ("\t6.  Get Mouse position\n");
+        printf ("\t7.  Get Mouse Interrupt Message\n");
+        printf ("\t8.  Get 7 segment state\n");
+        printf ("\t9.  Set 7 segment state\n");
+        printf ("\t10. Reset the device\n");
+        printf ("\t11. Reenumerate the device\n");
         printf ("\n\t0. Exit\n");
         printf ("\n\tSelection: ");
-
-        if (scanf ("%d", &selection) <= 0) {
+        
+        if ( scanf ( "%d", &function ) <= 0 ) {
             printf("Error reading input!\n");
-            goto done;
+            goto Error;
         }
 
-        switch (selection) {
+        switch ( function ) {
 
-        case 1: 
-            {
-                for (i=0; i < 8; i++) {
-                    retval = setBargraphDisplay( 1<<i );
-                    if (retval != 0) {
-                        break;
-                    }
-                    sleep(1);
-                }
-            }
+        case LIGHT_ONE_BAR: 
+	    	printf ( "Which Bar (input number 1 thru %d)?\n", BARGRAPH_MAXBAR );
+        	if ( scanf ( "%d", &bar ) <= 0 ) {
+	            printf ( "Error reading input!\n" );
+    	        goto Error;
+	        }
+
+			if ( bar == 0 || bar > BARGRAPH_MAXBAR ) {
+	            printf ( "Invalid bar number!\n" );
+	            goto Error;
+	        }
+
+        	bar--; // normalize to 0 to 3
+
+        	barValue = 1 << (unsigned char)bar;
+			barValue |= BARGRAPH_ON;
+
+			if ( 0 != setBargraphDisplay ( barValue ) ) {
+				printf ( "setBargraphDisplay failed with error \n" );
+	            goto Error;	
+			}
+
             break;
 
-        case 2:
-            {
-                setBargraphDisplay( 0xFF );
-            }
+        case CLEAR_ONE_BAR:
+			printf ( "Which Bar (input number 1 thru %d)?\n", BARGRAPH_MAXBAR );
+			if ( scanf ("%d", &bar ) <= 0 ) {
+	            printf ( "Error reading input!\n" );
+    	        goto Error;
+	        }
+
+    	    if ( bar == 0 || bar > BARGRAPH_MAXBAR ) {
+	            printf("Invalid bar number!\n");
+    	        goto Error;
+        	}
+
+			bar--;
+            barValue = BARGRAPH_OFF; // reset and flag off
+			barValue |= 1 << (unsigned char) bar;
+
+            if ( 0 != setBargraphDisplay ( barValue ) ) {
+				printf ( "setBargraphDisplay failed with error \n" );
+	            goto Error;	
+			}
+            
             break;
 
-        case 3:
-            {
-                setBargraphDisplay( 0x00 );
-            }
+        case LIGHT_ALL_BARS:
+            if ( 0 != setBargraphDisplay ( 0x8F ) ) {
+				printf ( "setBargraphDisplay failed with error \n" );
+	            goto Error;	
+			}
             break;
 
-        case 4:
+        case CLEAR_ALL_BARS:
+        	if ( 0 != setBargraphDisplay ( 0x0F ) ) {
+				printf ( "setBargraphDisplay failed with error \n" );
+	            goto Error;	
+			}
+            break;
+
+		case GET_BAR_GRAPH_LIGHT_STATE:
             {
                 char * str = getBargraphDisplay();
+
                 if (str) {
                     printf("Bar Graph: \n");
                     printf("    Bar8 is %s\n", str[7] == '*' ? "ON" : "OFF");
@@ -495,16 +509,18 @@ int main(int argc, char ** argv)
             break;
 
             
-       case 6:
+       	case GET_MOUSE_POSITION:
+       		break;
+
+	    case GET_MOUSE_POSITION_AS_INTERRUPT_MESSAGE:
+#if 0
             {
                 if( waitForSwitchEvent() != 0) {
                     break;
                 }
             }
             /* Note fall-through to case 5 */
-
-        case 5:
-            {
+                        {
                 char * str = getSwitchesState();
                 if (str) {
                     printf("Switches: \n");
@@ -521,18 +537,22 @@ int main(int argc, char ** argv)
             }
             break;
 
-        case 7: 
+#endif
+
+        case GET_7_SEGEMENT_STATE:
             {
-                retval = get7SegmentDisplay( &i );
-                if (retval != 0) {
-                    break;
+#if 0            	
+                if ( 0 != get7SegmentDisplay( &i ) ) {
+                    goto Error;
                 }
-                printf("7-Segment Display value:  %c\n", i);
+                printf ( "7-Segment Display value:  %c\n", i );
+#endif                
             }
             break;
 
-        case 8:
+        case SET_7_SEGEMENT_STATE: 
             {
+#if 0            	
                 for (i=0; i < 10; i++) {
                     retval = set7SegmentDisplay( i );
                     if (retval != 0) {
@@ -540,24 +560,54 @@ int main(int argc, char ** argv)
                     }
                     sleep(1);
                 }
+#endif                
             }
             break;
 
-        case 0:
-            printf("\nOSRFX2 -- done\n");
-            retval = 0;
-			goto done;
-        
-        default:
+        case RESET_DEVICE:
+			// TBD
             break;
+
+        case REENUMERATE_DEVICE:
+        	// TBD
+        	break;
+        	
+        default:
+            printf("\nOSRFX2 -- done\n");
+			goto Error;
         }
+    } // end of while loop
+
+Error:
+	return;
+}
+
+/*---------------------------------------------------------------------------*/
+/*                                                                           */
+/*---------------------------------------------------------------------------*/
+int main ( int argc, char ** argv )
+{
+    int           retval = 0;
+
+	if ( 0 == parseArg ( argc, argv ) ) {
+		retval = -1;
+		goto done;
+	}
+
+	if ( 0 != getDevicePath() ) {
+		retval = -1;
+        goto done;
     }
 
+	/* start process */
+    if (G_fPlayWithDevice) {
+        PlayWithDevice();
+        goto done;
+    }
+    
     /*
      *   Clean-up and exit.
      */ 
-#endif
-
 done:
     if (gDevname)   free(gDevname);
     if (gSyspath)   free(gSyspath);

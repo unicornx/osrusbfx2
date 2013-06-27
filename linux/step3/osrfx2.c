@@ -115,18 +115,6 @@ static ssize_t osrfx2_show_bargraph( struct device * dev,
         return retval;
     }
 
-/*
-printf("Bar Graph: \n");
-        printf("    Bar8 is %s\n", barGraphState.Bar8 ? "ON" : "OFF");
-        printf("    Bar7 is %s\n", barGraphState.Bar7 ? "ON" : "OFF");
-        printf("    Bar6 is %s\n", barGraphState.Bar6 ? "ON" : "OFF");
-        printf("    Bar5 is %s\n", barGraphState.Bar5 ? "ON" : "OFF");
-        printf("    Bar4 is %s\n", barGraphState.Bar4 ? "ON" : "OFF");
-        printf("    Bar3 is %s\n", barGraphState.Bar3 ? "ON" : "OFF");
-        printf("    Bar2 is %s\n", barGraphState.Bar2 ? "ON" : "OFF");
-        printf("    Bar1 is %s\n", barGraphState.Bar1 ? "ON" : "OFF");
-*/
-   
     retval = sprintf(buf, "%s%s%s%s%s%s%s%s",    /* bottom LED --> top LED */
                      (packet->Bar1) ? "*" : ".",
                      (packet->Bar2) ? "*" : ".",
@@ -154,10 +142,8 @@ static ssize_t osrfx2_set_bargraph( struct device * dev,
 {
     struct usb_interface  * intf   = to_usb_interface(dev);
     struct osrfx2         * fx2dev = usb_get_intfdata(intf);
-	unsigned char bargraph;
     struct bargraph_state * packet;
 
-    unsigned int value;
     int retval;
     char * end;
 
@@ -167,21 +153,10 @@ static ssize_t osrfx2_set_bargraph( struct device * dev,
     }
     packet->BarsOctet = 0;
 
-	bargraph = 0;
-
-    value = (simple_strtoul(buf, &end, 10) & 0xFF);
+	packet->BarsOctet = (unsigned char)(simple_strtoul(buf, &end, 10) & 0xFF);
     if (buf == end) {
-        value = 0;
+        packet->BarsOctet = 0;
     }
-
-    packet->Bar1 = (value & 0x01) ? 1 : 0;
-    packet->Bar2 = (value & 0x02) ? 1 : 0;
-    packet->Bar3 = (value & 0x04) ? 1 : 0;
-    packet->Bar4 = (value & 0x08) ? 1 : 0;
-//    packet->Bar5 = (value & 0x10) ? 1 : 0;
-//    packet->Bar6 = (value & 0x20) ? 1 : 0;
-//    packet->Bar7 = (value & 0x40) ? 1 : 0;
-    packet->Bar8 = (value & 0x80) ? 1 : 0;
 
     retval = usb_control_msg(fx2dev->udev, 
                              usb_sndctrlpipe(fx2dev->udev, 0), 
@@ -189,8 +164,8 @@ static ssize_t osrfx2_set_bargraph( struct device * dev,
                              USB_DIR_OUT | USB_TYPE_VENDOR,
                              0,
                              0,
-                             &bargraph, 
-                             sizeof(bargraph),
+                             packet, 
+                             sizeof(*packet),
                              USB_CTRL_GET_TIMEOUT);
 
     if (retval < 0) {
