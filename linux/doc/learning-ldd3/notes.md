@@ -8,6 +8,8 @@ git clone git://github.com/martinezjavier/ldd3.git
 Linux Kernel Source on line @ http://lxr.free-electrons.com/ident
 LXR @ China: http://lxr.oss.org.cn/
 
+Another good book about driver development and newer than ldd3 @http://www.embeddedlinux.org.cn/EssentialLinuxDeviceDrivers/
+
 一个简单但生动的教程 "Linux Device Drivers Series" tag @ http://www.linuxforu.com/tag/linux-device-drivers-series/page/2/
 
 一些例子教程:  
