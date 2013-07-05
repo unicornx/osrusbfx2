@@ -68,7 +68,9 @@ MODULE_DEVICE_TABLE (usb, osrfx2_table);
  on the information passed to it about the device and decide whether the 
  driver is really appropriate for that device.
  */
-static int osrfx2_probe ( struct usb_interface *interface, const struct usb_device_id *id )
+static int osrfx2_drv_probe ( 
+	struct usb_interface *interface, 
+	const struct usb_device_id *id )
 {
 	dev_info ( &interface->dev, "--> osrfx2_probe\n" );
 	return 0;
@@ -78,7 +80,7 @@ static int osrfx2_probe ( struct usb_interface *interface, const struct usb_devi
  The disconnect function is called when the driver should no longer control 
  the device for some reason and can do clean-up.
  */
-static void osrfx2_disconnect ( struct usb_interface *interface )
+static void osrfx2_drv_disconnect ( struct usb_interface *interface )
 {
 	dev_info ( &interface->dev, "--> osrfx2_disconnect\n" );
 }
@@ -104,8 +106,8 @@ static void osrfx2_disconnect ( struct usb_interface *interface )
 */
 static struct usb_driver osrfx2_driver = {
     .name        = "osrfx2",
-    .probe       = osrfx2_probe,
-    .disconnect  = osrfx2_disconnect,
+    .probe       = osrfx2_drv_probe,
+    .disconnect  = osrfx2_drv_disconnect,
     .id_table    = osrfx2_table,
 };
 

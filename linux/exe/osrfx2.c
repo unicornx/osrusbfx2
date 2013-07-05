@@ -18,6 +18,7 @@
 #include <ctype.h>
 #include <sys/stat.h>
 #include <sys/poll.h>
+#include <assert.h>
 
 #include "public.h"
 
@@ -44,19 +45,25 @@
 #endif
 #define FALSE 0
 
+#ifdef ULONG
+#undef ULONG
+#endif
+#define ULONG unsigned long
+
 
 BOOL G_fDumpUsbConfig = FALSE;    // flags set in response to console command line switches
 BOOL G_fDumpReadData = FALSE;
 BOOL G_fRead = FALSE;
 BOOL G_fWrite = FALSE;
 BOOL G_fPlayWithDevice = FALSE;
-BOOL G_fPerformAsyncIo = FALSE;
+BOOL G_fPerformBlockingIo = TRUE;
 unsigned long G_IterationCount = 1; //count of iterations of the test we are to perform
 int G_WriteLen = 512;         // #bytes to write
 int G_ReadLen = 512;          // #bytes to read
 
-char * gDevname = NULL;
-char * gSyspath = NULL;
+char * gDevName = NULL;
+char * gDevPath = NULL;
+char * gSysPath = NULL;
 
 typedef enum _INPUT_FUNCTION {
     LIGHT_ONE_BAR = 1,
@@ -82,18 +89,19 @@ static int getDevicePath ( void )
 	char   devpath [MAX_DEVPATH_LENGTH];
 	char   syspath [MAX_DEVPATH_LENGTH];
 
-	devname = (gDevname) ? gDevname : "osrfx2_0";
+	devname = (gDevName) ? gDevName : "osrfx2_0";
 
+	// get device path
 	snprintf ( devpath, sizeof(devpath), "/dev/%s", devname );
-
 	if( access( devpath, F_OK ) == -1 ) {
     	fprintf ( stderr, "Can't find %s device\n", devpath );
     	return -1;
 	}
-	
+	gDevPath = strdup(devpath);
+
+	// get sys path
 	snprintf(syspath, sizeof(syspath), "/sys/class/usb/%s/device", devname);
-	
-	gSyspath = strdup(syspath);
+	gSysPath = strdup(syspath);
 
 	return 0;
 }
@@ -115,7 +123,7 @@ void printUsage()
     printf("-c [n] where n is number of iterations (default = 1)\n");
     printf("-v verbose -- dumps read data\n");
     printf("-p to control bar LEDs, seven segment, and dip switch\n");
-    printf("-a to perform asynchronous I/O\n");
+    printf("-n to perform non-blocking I/O (default is blocking I/O)\n");
     printf("-u to dump USB configuration and pipe info \n");
 
     return;
@@ -143,7 +151,7 @@ int parseArg( int argc, char** argv )
 
     /* Regarding getopt, refer to http://blog.csdn.net/lazy_tiger/article/details/1806367 */
   	while ( ( 1 == retval ) && 
-  		    ( ( ch = getopt ( argc, argv, "r:R:w:W:c:C:uUpPaAvV" ) ) != -1 ) ) {
+  		    ( ( ch = getopt ( argc, argv, "r:R:w:W:c:C:uUpPnNvV" ) ) != -1 ) ) {
 #if 0
     	printf("optind:%d\n",optind);
     	printf("optarg:%s\n",optarg);
@@ -206,9 +214,9 @@ int parseArg( int argc, char** argv )
             G_fPlayWithDevice = TRUE;
             break;
             
-        case 'a':
-        case 'A':
-            G_fPerformAsyncIo = TRUE;
+        case 'n':
+        case 'N':
+            G_fPerformBlockingIo = FALSE;
             break;
             
         case 'v':
@@ -236,7 +244,7 @@ static char * getBargraphDisplay( void )
     char   attrname [MAX_DEVPATH_LENGTH];
     char   attrvalue [32];
 
-    snprintf(attrname, sizeof(attrname), "%s/bargraph", gSyspath);
+    snprintf(attrname, sizeof(attrname), "%s/bargraph", gSysPath);
 
     fd = open( attrname, O_RDONLY );
     if (fd == -1)  
@@ -263,7 +271,7 @@ static int setBargraphDisplay( unsigned char value )
     char   attrname [MAX_DEVPATH_LENGTH];
     char   attrvalue [32];
 
-    snprintf(attrname, sizeof(attrname), "%s/bargraph", gSyspath);
+    snprintf(attrname, sizeof(attrname), "%s/bargraph", gSysPath);
     snprintf(attrvalue, sizeof(attrvalue), "%d", value);
     len = strlen(attrvalue) + 1;
 
@@ -290,7 +298,7 @@ static int get7SegmentDisplay( unsigned char * value )
     char   attrname [256];
     char   attrvalue [32];
 
-    snprintf(attrname, sizeof(attrname), "%s/7segment", gSyspath);
+    snprintf(attrname, sizeof(attrname), "%s/7segment", gSysPath);
 
     fd = open( attrname, O_RDONLY );
     if (fd == -1)  
@@ -316,7 +324,7 @@ static int set7SegmentDisplay( unsigned char value )
     char   attrname [256];
     char   attrvalue [32];
 
-    snprintf(attrname, sizeof(attrname), "%s/7segment", gSyspath);
+    snprintf(attrname, sizeof(attrname), "%s/7segment", gSysPath);
     snprintf(attrvalue, sizeof(attrvalue), "%d", value);
     len = strlen(attrvalue) + 1;
 
@@ -342,7 +350,7 @@ static char * getSwitchesState( void )
     char   attrname [256];
     char   attrvalue [32];
 
-    snprintf(attrname, sizeof(attrname), "%s/switches", gSyspath);
+    snprintf(attrname, sizeof(attrname), "%s/switches", gSysPath);
 
     fd = open( attrname, O_RDONLY );
     if (fd == -1)  
@@ -368,7 +376,7 @@ static int waitForSwitchEvent( void )
     /* 
      *   Initialize pollfds; get input from /dev/osrfx2_0 
      */
-    pollfds.fd = open( gSyspath, O_RDWR );
+    pollfds.fd = open( gSysPath, O_RDWR );
     if (pollfds.fd  < 0) {
         return -1;
     }
@@ -510,9 +518,11 @@ void PlayWithDevice ()
 
             
        	case GET_MOUSE_POSITION:
+       		printf("\nOSRFX2 -- NOT supported!\n");
        		break;
 
 	    case GET_MOUSE_POSITION_AS_INTERRUPT_MESSAGE:
+	    	printf("\nOSRFX2 -- to be done\n");
 #if 0
             {
                 if( waitForSwitchEvent() != 0) {
@@ -540,18 +550,18 @@ void PlayWithDevice ()
 #endif
 
         case GET_7_SEGEMENT_STATE:
-            {
+			printf("\nOSRFX2 -- to be done\n");
 #if 0            	
                 if ( 0 != get7SegmentDisplay( &i ) ) {
                     goto Error;
                 }
                 printf ( "7-Segment Display value:  %c\n", i );
 #endif                
-            }
             break;
 
         case SET_7_SEGEMENT_STATE: 
-            {
+        	printf("\nOSRFX2 -- to be done\n");
+
 #if 0            	
                 for (i=0; i < 10; i++) {
                     retval = set7SegmentDisplay( i );
@@ -561,15 +571,16 @@ void PlayWithDevice ()
                     sleep(1);
                 }
 #endif                
-            }
             break;
 
         case RESET_DEVICE:
 			// TBD
+			printf("\nOSRFX2 -- to be done\n");
             break;
 
         case REENUMERATE_DEVICE:
         	// TBD
+        	printf("\nOSRFX2 -- to be done\n");
         	break;
         	
         default:
@@ -580,6 +591,163 @@ void PlayWithDevice ()
 
 Error:
 	return;
+}
+
+#define NPERLN 8
+
+void Dump ( unsigned char *b, int len )
+/*++
+Routine Description:
+
+    Called to do formatted ascii dump to console of the io buffer
+
+Arguments:
+
+    buffer and length
+
+Return Value:
+
+    none
+
+--*/
+{
+    ULONG i;
+    ULONG longLen = (ULONG)len / sizeof( ULONG );
+    ULONG *pBuf = (ULONG*) b;
+
+    // dump an ordinal ULONG for each sizeof(ULONG)'th byte
+    printf("\n****** BEGIN DUMP LEN decimal %d, 0x%x\n", len,len);
+    for (i=0; i<longLen; i++) {
+        printf("%04X ", (ULONG)(*pBuf++));
+        if (i % NPERLN == (NPERLN - 1)) {
+            printf("\n");
+        }
+    }
+    if (i % NPERLN != 0) {
+        printf("\n");
+    }
+    printf("\n****** END DUMP LEN decimal %d, 0x%x\n", len,len);
+}
+
+void ReadWrite ( )
+{
+    int wfd = -1; // write file descriptor
+    int rfd = -1; // read file descriptor
+
+    unsigned char * pInBuf = NULL;
+    unsigned char * pOutBuf = NULL;
+    ssize_t wlen;
+    ssize_t rlen;
+
+    int i;
+
+    if (G_fRead) {
+        if ( G_fDumpReadData ) { // round size to sizeof ULONG for readable dumping
+            while( G_ReadLen % sizeof( ULONG ) ) {
+                G_ReadLen++;
+            }
+        }
+    }
+
+    if (G_fWrite) {
+        if ( G_fDumpReadData ) { // round size to sizeof ULONG for readable dumping
+            while( G_WriteLen % sizeof( ULONG ) ) {
+                G_WriteLen++;
+            }
+        }
+    }
+
+    wfd = open ( gDevPath, O_WRONLY | O_NONBLOCK );
+    if ( -1 == wfd ) {
+        fprintf ( stderr, "open for write: %s failed\n", gDevPath );
+        goto exit;
+    }
+
+    rfd = open ( gDevPath, O_RDONLY | O_NONBLOCK );
+    if ( -1 == rfd ) {
+        fprintf ( stderr, "open for read: %s failed\n", gDevPath );
+        goto exit;
+    }
+
+	pInBuf = malloc(G_ReadLen);
+	if ( NULL == pInBuf ) goto exit;
+    
+    pOutBuf = malloc(G_WriteLen);
+    if ( NULL != pOutBuf ) {
+	    ULONG *pOut = (ULONG *) pOutBuf;
+    	ULONG numLongs = G_WriteLen / sizeof( ULONG );
+	    /* put some data in the output buffer */
+    	int j;
+    	for ( j=0; j<numLongs; j++ ) {
+	        *(pOut+j) = j;
+    	}
+    }
+    else goto exit;
+
+    for ( i = 0; i < G_IterationCount; i++ ) {
+
+        if ( G_fWrite ) {
+            //
+            // send the write
+            //
+			wlen = write ( wfd, pOutBuf, G_WriteLen );
+            if ( wlen < 0 ) {
+                fprintf ( stderr, "write error\n");
+                goto exit;
+            }
+            printf ("write (%04.4d) : request %06.6d bytes -- %06.6d bytes written\n",
+                    i, G_WriteLen, wlen );
+            assert ( wlen == G_WriteLen );
+        }
+
+        if ( G_fRead ) {
+
+            int index = 0;
+
+            do {
+                rlen = read ( rfd, &pInBuf[index], (G_ReadLen - index) );
+                if ( rlen < 0 ) {
+                    fprintf ( stderr, "read error\n" );
+                    goto exit;
+                }
+                printf("Read (%04.4d)(%04.4d) : request %06.6d bytes -- %06.6d bytes read\n",
+                   i, index, (G_ReadLen - index), rlen );
+
+                index += rlen;
+
+            } while ( index < G_ReadLen );
+            assert ( index == G_ReadLen );
+
+            if (G_fWrite) {
+
+                /* validate the input buffer against what
+                 * we sent
+                 * Till we arrive here, we have asserted length of
+                 * read should be G_ReadLen and that of write should
+               	 * be G_WriteLen
+               	 */
+                if ( memcmp ( pOutBuf, pInBuf, G_WriteLen ) != 0 ) {
+                	fprintf ( stderr, "Mismatch error between buffer contents.\n" );
+	            }
+
+                if( G_fDumpReadData ) {
+                    printf("Dumping read buffer\n");
+                    Dump( pInBuf,  G_ReadLen );
+                    printf("Dumping write buffer\n");
+                    Dump( pOutBuf, G_WriteLen );
+                }
+            }
+        }
+    }
+
+
+
+exit:
+	if ( wfd > 0 ) close ( wfd );
+    if ( rfd > 0 ) close ( rfd );
+
+	if ( NULL != pInBuf ) free ( pInBuf );
+	if ( NULL != pOutBuf ) free ( pOutBuf );
 }
 
 /*---------------------------------------------------------------------------*/
@@ -600,17 +768,25 @@ int main ( int argc, char ** argv )
     }
 
 	/* start process */
+
+	// play
     if (G_fPlayWithDevice) {
         PlayWithDevice();
         goto done;
     }
-    
+
+    // doing a read, write, or both test
+    if ((G_fRead) || (G_fWrite)) {
+    	ReadWrite ( );
+    }
+
     /*
      *   Clean-up and exit.
      */ 
 done:
-    if (gDevname)   free(gDevname);
-    if (gSyspath)   free(gSyspath);
+    if (gDevName)   free(gDevName);
+    if (gDevPath)   free(gDevPath);
+    if (gSysPath)   free(gSysPath);
 
     return retval;
 }

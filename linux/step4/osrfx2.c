@@ -123,10 +123,10 @@ static void osrfx2_delete ( struct kref *kref )
 	usb_put_dev ( fx2dev->udev );
 
 	/* free device context memory */
-    if (fx2dev->bulk_in_buffer) {
+    if ( fx2dev->bulk_in_buffer ) {
         kfree( fx2dev->bulk_in_buffer );
     }
-    if (fx2dev->bulk_out_buffer) {
+    if ( fx2dev->bulk_out_buffer ) {
         kfree( fx2dev->bulk_out_buffer );
     }
 
@@ -191,9 +191,10 @@ static int osrfx2_find_endpoints ( struct osrfx2 * fx2dev )
  *                                                                         
  * Note the two different function defintions depending on kernel version.  
  */
-static ssize_t osrfx2_show_bargraph( struct device * dev, 
-                                     struct device_attribute * attr, 
-                                     char * buf )
+static ssize_t osrfx2_attr_bargraph_get (
+	struct device * dev, 
+    struct device_attribute * attr, 
+    char * buf )
 {
     struct usb_interface  * intf   = to_usb_interface(dev);
     struct osrfx2         * fx2dev = usb_get_intfdata(intf);
@@ -243,10 +244,11 @@ static ssize_t osrfx2_show_bargraph( struct device * dev,
 
  Note the two different function defintions depending on kernel version.
  */
-static ssize_t osrfx2_set_bargraph( struct device * dev, 
-                                    struct device_attribute * attr, 
-                                    const char * buf,
-                                    size_t count )
+static ssize_t osrfx2_attr_bargraph_set (
+	struct device * dev, 
+    struct device_attribute * attr, 
+    const char * buf,
+    size_t count )
 {
     struct usb_interface  * intf   = to_usb_interface(dev);
     struct osrfx2         * fx2dev = usb_get_intfdata(intf);
@@ -294,7 +296,10 @@ static ssize_t osrfx2_set_bargraph( struct device * dev,
  "dev_attr_bargraph" is referenced in both probe (create the attribute) and 
  disconnect (remove the attribute) routines.
  */
-static DEVICE_ATTR( bargraph, S_IRUGO | S_IWUGO, osrfx2_show_bargraph, osrfx2_set_bargraph );
+static DEVICE_ATTR ( bargraph, \
+                     S_IRUGO | S_IWUGO, \
+                     osrfx2_attr_bargraph_get, \
+                     osrfx2_attr_bargraph_set );
 
 static struct usb_driver osrfx2_driver;
 
@@ -314,7 +319,7 @@ static struct usb_driver osrfx2_driver;
     After driver store device context data in the open method for this device, 
     other file operation methods can get access to these data easily later.
  */
-static int osrfx2_open ( struct inode *inode, struct file *file )
+static int osrfx2_fp_open ( struct inode *inode, struct file *file )
 {
 	struct osrfx2 *dev;
 	struct usb_interface *interface;
@@ -338,7 +343,15 @@ static int osrfx2_open ( struct inode *inode, struct file *file )
 		retval = -ENODEV;
 		goto exit;
 	}
-	
+
+	/* Set this device as non-seekable bcos it does not make sense for osrfx2. 
+	   Refer to http://lwn.net/Articles/97154/ "Safe seeks" and ldd3 section 6.5.
+	*/ 
+    retval = nonseekable_open(inode, file);
+    if ( 0 != retval ) {
+		goto exit;
+    }
+    
 	/* increment our usage count for the device */
 	kref_get( &dev->kref );
 
@@ -356,7 +369,7 @@ exit:
  1) Deallocate anything that open allocated in filp->private_data.
  2) Shut down the device on last close.
  */
-static int osrfx2_release ( struct inode *inode, struct file *file )
+static int osrfx2_fp_release ( struct inode *inode, struct file *file )
 {
 	struct osrfx2 *dev;
 
@@ -372,8 +385,11 @@ static int osrfx2_release ( struct inode *inode, struct file *file )
 	return 0;
 }
 
-static ssize_t osrfx2_read ( struct file * file, char * buffer, 
-                             size_t count, loff_t * ppos )
+static ssize_t osrfx2_fp_read ( 
+	struct file * file, 
+	char * buffer, 
+    size_t count, 
+    loff_t * ppos )
 {
     struct osrfx2 * fx2dev;
     int retval = 0;
@@ -409,7 +425,7 @@ static ssize_t osrfx2_read ( struct file * file, char * buffer,
     return retval;
 }
 
-static void osrfx2_write_bulk_callback ( struct urb *urb )
+static void osrfx2_fp_write_bulk_callback ( struct urb *urb )
 {
     struct osrfx2 * fx2dev = (struct osrfx2 *)urb->context;
 
@@ -429,8 +445,11 @@ static void osrfx2_write_bulk_callback ( struct urb *urb )
                      urb->transfer_dma );
 }
 
-static ssize_t osrfx2_write ( struct file * file, const char * user_buffer, 
-                              size_t count, loff_t * ppos)
+static ssize_t osrfx2_fp_write ( 
+	struct file * file, 
+	const char * user_buffer, 
+	size_t count, 
+	loff_t * ppos )
 {
     struct osrfx2 * fx2dev;
     struct urb * urb = NULL;
@@ -472,7 +491,7 @@ static ssize_t osrfx2_write ( struct file * file, const char * user_buffer,
                        pipe,
                        buf, 
                        count, 
-                       osrfx2_write_bulk_callback, 
+                       osrfx2_fp_write_bulk_callback, 
                        fx2dev );
     urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 
@@ -510,10 +529,11 @@ error:
  */
 static struct file_operations osrfx2_fops = {
 	.owner   = THIS_MODULE,
-	.open    = osrfx2_open,
-	.release = osrfx2_release,
-	.read    = osrfx2_read,
-	.write   = osrfx2_write,
+	.open    = osrfx2_fp_open,
+	.release = osrfx2_fp_release,
+	.llseek  = no_llseek,
+	.read    = osrfx2_fp_read,
+	.write   = osrfx2_fp_write,
 };
 
 /* 
@@ -550,7 +570,9 @@ static struct usb_class_driver osrfx2_class = {
  on the information passed to it about the device and decide whether the 
  driver is really appropriate for that device.
  */
-static int osrfx2_probe ( struct usb_interface *interface, const struct usb_device_id *id )
+static int osrfx2_drv_probe ( 
+	struct usb_interface *interface, 
+	const struct usb_device_id *id )
 {
 	int retval = -ENOMEM;
 	struct osrfx2 *fx2dev = NULL;
@@ -641,7 +663,7 @@ error:
  The disconnect function is called when the driver should no longer control 
  the device for some reason and can do clean-up.
  */
-static void osrfx2_disconnect ( struct usb_interface *interface )
+static void osrfx2_drv_disconnect ( struct usb_interface *interface )
 {
 	struct osrfx2 *dev;
 	int minor = interface->minor;
@@ -655,7 +677,7 @@ static void osrfx2_disconnect ( struct usb_interface *interface )
 	usb_set_intfdata ( interface, NULL );
 
 	/* remove bargraph attribute from the sysfs */
-    device_remove_file(&interface->dev, &dev_attr_bargraph);
+    device_remove_file ( &interface->dev, &dev_attr_bargraph );
     
 	/* give back our minor */
 	usb_deregister_dev ( interface, &osrfx2_class );
@@ -689,8 +711,8 @@ static void osrfx2_disconnect ( struct usb_interface *interface )
 */
 static struct usb_driver osrfx2_driver = {
     .name        = "osrfx2",
-    .probe       = osrfx2_probe,
-    .disconnect  = osrfx2_disconnect,
+    .probe       = osrfx2_drv_probe,
+    .disconnect  = osrfx2_drv_disconnect,
     .id_table    = osrfx2_table,
 };
 
