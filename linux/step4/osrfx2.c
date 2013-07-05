@@ -6,7 +6,7 @@
  published by the Free Software Foundation, version 2.
 
  Step4, this step:
- 1) How to process Read and Write on bulk IN/OUT endpoints.
+ 1) How to process read/write on bulk IN/OUT endpoints.
  */
 
 #include <linux/init.h>
@@ -105,9 +105,6 @@ static int osrfx2_init_bulks ( struct osrfx2 * fx2dev )
         return -ENOMEM;
     }
 
-//    init_MUTEX( &fx2dev->sem );
-//    init_waitqueue_head( &fx2dev->FieldEventQueue );
-
     return 0;
 }
 
@@ -156,16 +153,16 @@ static int osrfx2_find_endpoints ( struct osrfx2 * fx2dev )
         endpoint = &iface_desc->endpoint[i].desc;
 
         if ( !fx2dev->bulk_in_endpointAddr &&
-		     ( endpoint->bEndpointAddress & USB_DIR_IN ) &&
-		     ( ( endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK ) == USB_ENDPOINT_XFER_BULK ) ) {
+		     usb_endpoint_dir_in ( endpoint ) &&
+		     usb_endpoint_xfer_bulk ( endpoint ) ) {
 			/* we found a bulk in endpoint */
 			fx2dev->bulk_in_endpointAddr = endpoint->bEndpointAddress;
 			fx2dev->bulk_in_size = endpoint->wMaxPacketSize;
 		}
 
 		if ( !fx2dev->bulk_out_endpointAddr &&
-		     ( endpoint->bEndpointAddress & USB_DIR_OUT ) &&
-		     ( ( endpoint->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK ) == USB_ENDPOINT_XFER_BULK ) ) {
+		     usb_endpoint_dir_out ( endpoint ) &&
+		     usb_endpoint_xfer_bulk ( endpoint ) ) {
 			/* we found a bulk out endpoint */
 			fx2dev->bulk_out_endpointAddr = endpoint->bEndpointAddress;
 			fx2dev->bulk_out_size = endpoint->wMaxPacketSize;
@@ -201,6 +198,8 @@ static ssize_t osrfx2_attr_bargraph_get (
     struct bargraph_state * packet;
     int retval;
 
+	printk ( KERN_INFO "--> osrfx2_attr_bargraph_get\n" );
+		
     packet = kmalloc(sizeof(*packet), GFP_KERNEL);
     if (!packet) {
         return -ENOMEM;
@@ -256,6 +255,8 @@ static ssize_t osrfx2_attr_bargraph_set (
 
     int retval;
     char * end;
+
+   	printk ( KERN_INFO "--> osrfx2_attr_bargraph_set\n" );
 
     packet = kmalloc(sizeof(*packet), GFP_KERNEL);
     if (!packet) {
@@ -326,7 +327,7 @@ static int osrfx2_fp_open ( struct inode *inode, struct file *file )
 	int subminor;
 	int retval = 0;
 
-	printk ( KERN_INFO "--> osrfx2_open\n" );
+	printk ( KERN_INFO "--> osrfx2_fp_open\n" );
 
 	subminor = iminor(inode);
 	interface = usb_find_interface ( &osrfx2_driver, subminor );
@@ -373,7 +374,7 @@ static int osrfx2_fp_release ( struct inode *inode, struct file *file )
 {
 	struct osrfx2 *dev;
 
-	printk ( KERN_INFO "--> osrfx2_release\n" );
+	printk ( KERN_INFO "--> osrfx2_fp_release\n" );
 	
 	dev = (struct osrfx2 *)file->private_data;
 	if ( NULL == dev )
@@ -395,6 +396,8 @@ static ssize_t osrfx2_fp_read (
     int retval = 0;
     int bytes_read;
     int pipe;
+
+	printk ( KERN_INFO "--> osrfx2_fp_read\n" );    
 
     fx2dev = ( struct osrfx2* ) file->private_data;
 
@@ -429,6 +432,8 @@ static void osrfx2_fp_write_bulk_callback ( struct urb *urb )
 {
     struct osrfx2 * fx2dev = (struct osrfx2 *)urb->context;
 
+	printk ( KERN_INFO "--> osrfx2_fp_write_bulk_callback\n" );
+	
 	/* sync/async unlink faults aren't errors */
     if ( urb->status && 
          ! ( urb->status == -ENOENT || 
@@ -457,6 +462,8 @@ static ssize_t osrfx2_fp_write (
     int pipe;
     int retval = 0;
 
+	printk ( KERN_INFO "--> osrfx2_fp_write\n" );
+	
     fx2dev = (struct osrfx2 *)file->private_data;
 
   	/* verify that we actually have some data to write */
@@ -577,7 +584,7 @@ static int osrfx2_drv_probe (
 	int retval = -ENOMEM;
 	struct osrfx2 *fx2dev = NULL;
 		
-	dev_info ( &interface->dev, "--> osrfx2_probe\n" );
+	dev_info ( &interface->dev, "--> osrfx2_drv_probe\n" );
 
 	/* allocate memory for our device context and initialize it */
 	fx2dev = kmalloc ( sizeof ( struct osrfx2 ), GFP_KERNEL );
@@ -668,7 +675,7 @@ static void osrfx2_drv_disconnect ( struct usb_interface *interface )
 	struct osrfx2 *dev;
 	int minor = interface->minor;
 
-	dev_info ( &interface->dev, "--> osrfx2_disconnect\n" );
+	dev_info ( &interface->dev, "--> osrfx2_drv_disconnect\n" );
 
 	/* prevent osrfx2_open() from racing osrfx2_disconnect() */
 	lock_kernel();

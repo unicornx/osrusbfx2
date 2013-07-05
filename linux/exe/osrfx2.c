@@ -169,7 +169,6 @@ int parseArg( int argc, char** argv )
 				}
 			}
             if ( 1 == retval ) {
-	            printf ( "r/R, read len = %d\n", G_ReadLen );
 	            G_fRead = TRUE;
             }
             break;
@@ -184,7 +183,6 @@ int parseArg( int argc, char** argv )
 				}
 			}
             if ( 1 == retval ) {
-	            printf ( "w/W, write len = %d\n", G_WriteLen );
 	            G_fWrite = TRUE;
             }
             break;        	
@@ -618,7 +616,7 @@ Return Value:
     // dump an ordinal ULONG for each sizeof(ULONG)'th byte
     printf("\n****** BEGIN DUMP LEN decimal %d, 0x%x\n", len,len);
     for (i=0; i<longLen; i++) {
-        printf("%04X ", (ULONG)(*pBuf++));
+        printf("%04lX ", (ULONG)(*pBuf++));
         if (i % NPERLN == (NPERLN - 1)) {
             printf("\n");
         }
@@ -657,13 +655,15 @@ void ReadWrite ( )
         }
     }
 
-    wfd = open ( gDevPath, O_WRONLY | O_NONBLOCK );
+//    wfd = open ( gDevPath, O_WRONLY | O_NONBLOCK );
+	wfd = open ( gDevPath, O_WRONLY );
     if ( -1 == wfd ) {
         fprintf ( stderr, "open for write: %s failed\n", gDevPath );
         goto exit;
     }
 
-    rfd = open ( gDevPath, O_RDONLY | O_NONBLOCK );
+//    rfd = open ( gDevPath, O_RDONLY | O_NONBLOCK );
+    rfd = open ( gDevPath, O_RDONLY );
     if ( -1 == rfd ) {
         fprintf ( stderr, "open for read: %s failed\n", gDevPath );
         goto exit;
@@ -695,7 +695,7 @@ void ReadWrite ( )
                 fprintf ( stderr, "write error\n");
                 goto exit;
             }
-            printf ("write (%04.4d) : request %06.6d bytes -- %06.6d bytes written\n",
+            printf ("Write (%04d) : request %06d bytes -- %06d bytes written\n",
                     i, G_WriteLen, wlen );
             assert ( wlen == G_WriteLen );
         }
@@ -710,7 +710,7 @@ void ReadWrite ( )
                     fprintf ( stderr, "read error\n" );
                     goto exit;
                 }
-                printf("Read (%04.4d)(%04.4d) : request %06.6d bytes -- %06.6d bytes read\n",
+                printf("Read (%04d)(%04d) : request %06d bytes -- %06d bytes read\n",
                    i, index, (G_ReadLen - index), rlen );
 
                 index += rlen;
@@ -727,14 +727,17 @@ void ReadWrite ( )
                	 * be G_WriteLen
                	 */
                 if ( memcmp ( pOutBuf, pInBuf, G_WriteLen ) != 0 ) {
-                	fprintf ( stderr, "Mismatch error between buffer contents.\n" );
+                	fprintf ( stderr, "Mismatch error between buffer contents!\n" );
 	            }
+                else {
+                	printf ( "\nMatched between Write and Read!\n" );
+                }
 
                 if( G_fDumpReadData ) {
-                    printf("Dumping read buffer\n");
-                    Dump( pInBuf,  G_ReadLen );
-                    printf("Dumping write buffer\n");
-                    Dump( pOutBuf, G_WriteLen );
+                    printf ( "\nDumping read buffer ...\n" );
+                    Dump ( pInBuf,  G_ReadLen );
+                    printf ( "\nDumping write buffer ...\n" );
+                    Dump ( pOutBuf, G_WriteLen );
                 }
             }
         }

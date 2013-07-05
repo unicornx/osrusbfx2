@@ -72,7 +72,7 @@ static int osrfx2_drv_probe (
 	struct usb_interface *interface, 
 	const struct usb_device_id *id )
 {
-	dev_info ( &interface->dev, "--> osrfx2_probe\n" );
+	dev_info ( &interface->dev, "--> osrfx2_drv_probe\n" );
 	return 0;
 }
 
@@ -82,7 +82,7 @@ static int osrfx2_drv_probe (
  */
 static void osrfx2_drv_disconnect ( struct usb_interface *interface )
 {
-	dev_info ( &interface->dev, "--> osrfx2_disconnect\n" );
+	dev_info ( &interface->dev, "--> osrfx2_drv_disconnect\n" );
 }
 
 /*

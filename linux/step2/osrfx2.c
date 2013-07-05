@@ -115,7 +115,7 @@ static int osrfx2_fp_open ( struct inode *inode, struct file *file )
 	int subminor;
 	int retval = 0;
 
-	printk ( KERN_INFO "--> osrfx2_open\n" );
+	printk ( KERN_INFO "--> osrfx2_fp_open\n" );
 
 	subminor = iminor(inode);
 	interface = usb_find_interface ( &osrfx2_driver, subminor );
@@ -162,7 +162,7 @@ static int osrfx2_fp_release ( struct inode *inode, struct file *file )
 {
 	struct osrfx2 *dev;
 
-	printk ( KERN_INFO "--> osrfx2_release\n" );
+	printk ( KERN_INFO "--> osrfx2_fp_release\n" );
 	
 	dev = (struct osrfx2 *)file->private_data;
 	if ( NULL == dev )
@@ -233,7 +233,7 @@ static int osrfx2_drv_probe (
 	int retval = -ENOMEM;
 	struct osrfx2 *fx2dev = NULL;
 		
-	dev_info ( &interface->dev, "--> osrfx2_probe\n" );
+	dev_info ( &interface->dev, "--> osrfx2_drv_probe\n" );
 
 	/* allocate memory for our device context and initialize it */
 	fx2dev = kmalloc ( sizeof ( struct osrfx2 ), GFP_KERNEL );
@@ -310,7 +310,7 @@ static void osrfx2_drv_disconnect ( struct usb_interface *interface )
 	struct osrfx2 *dev;
 	int minor = interface->minor;
 
-	dev_info ( &interface->dev, "--> osrfx2_disconnect\n" );
+	dev_info ( &interface->dev, "--> osrfx2_drv_disconnect\n" );
 
 	/* prevent osrfx2_open() from racing osrfx2_disconnect() */
 	lock_kernel();
