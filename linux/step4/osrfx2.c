@@ -7,19 +7,25 @@
 
  Step4, this step:
  1) How to process read/write on bulk IN/OUT endpoints.
+ 2) How to support poll
  */
 
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/usb.h>
-#include <linux/smp_lock.h> // for lock_kernel/unlock_kernel, notice BKL was
-                            // removed since 2.6.39, 
-                            // @http://kernelnewbies.org/BigKernelLock
 #include <asm/uaccess.h>                            
 
 #include "public.h"
 
 #define OSRFX2_DEVICE_MINOR_BASE   192
+
+/* our private defines. if this grows any larger, use your own .h file */
+#define MAX_TRANSFER            (PAGE_SIZE - 512)
+/* MAX_TRANSFER is chosen so that the VM is not stressed by
+   allocations > PAGE_SIZE and the number of packets in a page
+   is an integer 512 is the largest possible packet on EHCI */
+#define WRITES_IN_FLIGHT        8
+/* arbitrarily chosen */
 
 /* 
  Table of devices that work with this driver.
@@ -30,7 +36,7 @@
  export it to userspace using MODULE_DEVICE_TABLE(), and provide it to 
  the USB core through usb_driver structure - when registering the driver.
  */
-static struct usb_device_id osrfx2_table [] = {
+static const struct usb_device_id osrfx2_table [] = {
 	{ USB_DEVICE(OSRFX2_VENDOR_ID, OSRFX2_PRODUCT_ID) },
 	{ }					/* Terminating entry */
 };
@@ -65,30 +71,39 @@ MODULE_DEVICE_TABLE (usb, osrfx2_table);
  */
 struct osrfx2 {
 
-    struct usb_device    * udev;      /* the usb device for this device */
-    struct usb_interface * interface; /* the interface for this usb device
-                                         Note, for osrfx2 device, it has only
-                                         one interface.
-                                       */
+    struct usb_device     *udev;                    /* the usb device for this device */
+    struct usb_interface  *interface;               /* the interface for this usb device
+                                                      Note, for osrfx2 device, it has only
+                                                      one interface.
+                                                    */
+    struct kref            kref;                    /* Refrence counter for a device */
+
+	struct mutex           io_mutex;                /* synchronize I/O with disconnect */
+
 	/* USB Endpoint Address */
-    __u8  bulk_in_endpointAddr;
-    __u8  bulk_out_endpointAddr;
+    __u8  bulk_in_endpointAddr;                     /* the address of the bulk in endpoint */
+    __u8  bulk_out_endpointAddr;                    /* the address of the bulk out endpoint */
 
     /* USB Endpoint Max Packet Size */
-    size_t bulk_in_size;
-    size_t bulk_out_size;
+    size_t bulk_in_size;                            /* the size of the receive buffer */
+    size_t bulk_out_size;                           /* the size of the send buffer */
 
 	/* Transfer Buffers */
-    unsigned char *bulk_in_buffer;
-    unsigned char *bulk_out_buffer;
-   
+    unsigned char *bulk_in_buffer;                  /* the buffer to receive data */
+    unsigned char *bulk_out_buffer;                 /* the buffer to send data */
+
     /* URBs */
-    struct urb *bulk_in_urb;
-    struct urb *bulk_out_urb;
-                                       
-     
-    
-    struct kref            kref;      /* Refrence counter */
+    struct urb *bulk_in_urb;                        /* the urb to read data with */
+    struct usb_anchor       submitted;              /* in case we need to retract our submissions */
+
+    /* read & write */
+    struct semaphore        limit_sem;              /* limiting the number of writes in progress */
+    bool                    ongoing_read;           /* flag a read is going on */
+    wait_queue_head_t       bulk_in_wait;           /* to wait for an ongoing read */    
+
+	/* error status */
+    int                     errors;                 /* the last request tanked */    
+    spinlock_t              err_lock;               /* lock for errors */
 };
 
 /**
@@ -112,8 +127,9 @@ static void osrfx2_delete ( struct kref *kref )
 {	
 	struct osrfx2 *fx2dev;
 
-	printk ( KERN_INFO "--> osrfx2_delete\n" );
+	pr_info ( "--> osrfx2_delete\n" );
 
+	/* use macro container_of to find the appropriate device structure */
 	fx2dev = container_of ( kref, struct osrfx2, kref );
 		
     /* release a use of the usb device structure */
@@ -130,7 +146,6 @@ static void osrfx2_delete ( struct kref *kref )
     /* free device context memory */
 	kfree ( fx2dev );
 }
-
 
 /**
  * This routine will attempt to find the required endpoints and 
@@ -198,7 +213,7 @@ static ssize_t osrfx2_attr_bargraph_get (
     struct bargraph_state * packet;
     int retval;
 
-	printk ( KERN_INFO "--> osrfx2_attr_bargraph_get\n" );
+	pr_info ( "--> osrfx2_attr_bargraph_get\n" );
 		
     packet = kmalloc(sizeof(*packet), GFP_KERNEL);
     if (!packet) {
@@ -256,7 +271,7 @@ static ssize_t osrfx2_attr_bargraph_set (
     int retval;
     char * end;
 
-   	printk ( KERN_INFO "--> osrfx2_attr_bargraph_set\n" );
+   	pr_info ( "--> osrfx2_attr_bargraph_set\n" );
 
     packet = kmalloc(sizeof(*packet), GFP_KERNEL);
     if (!packet) {
@@ -327,12 +342,12 @@ static int osrfx2_fp_open ( struct inode *inode, struct file *file )
 	int subminor;
 	int retval = 0;
 
-	printk ( KERN_INFO "--> osrfx2_fp_open\n" );
+	pr_info ( "--> osrfx2_fp_open\n" );
 
 	subminor = iminor(inode);
 	interface = usb_find_interface ( &osrfx2_driver, subminor );
 	if ( !interface ) {
-		err ( "%s - error, can't find device for minor %d",
+		pr_err ( "%s - error, can't find device for minor %d",
 		     __FUNCTION__, subminor );
 		retval = -ENODEV;
 		goto exit;
@@ -374,7 +389,7 @@ static int osrfx2_fp_release ( struct inode *inode, struct file *file )
 {
 	struct osrfx2 *dev;
 
-	printk ( KERN_INFO "--> osrfx2_fp_release\n" );
+	pr_info ( "--> osrfx2_fp_release\n" );
 	
 	dev = (struct osrfx2 *)file->private_data;
 	if ( NULL == dev )
@@ -397,7 +412,7 @@ static ssize_t osrfx2_fp_read (
     int bytes_read;
     int pipe;
 
-	printk ( KERN_INFO "--> osrfx2_fp_read\n" );    
+	pr_info ( "--> osrfx2_fp_read\n" );    
 
     fx2dev = ( struct osrfx2* ) file->private_data;
 
@@ -432,7 +447,7 @@ static void osrfx2_fp_write_bulk_callback ( struct urb *urb )
 {
     struct osrfx2 * fx2dev = (struct osrfx2 *)urb->context;
 
-	printk ( KERN_INFO "--> osrfx2_fp_write_bulk_callback\n" );
+	pr_info ( "--> osrfx2_fp_write_bulk_callback\n" );
 	
 	/* sync/async unlink faults aren't errors */
     if ( urb->status && 
@@ -462,7 +477,7 @@ static ssize_t osrfx2_fp_write (
     int pipe;
     int retval = 0;
 
-	printk ( KERN_INFO "--> osrfx2_fp_write\n" );
+	pr_info ( "--> osrfx2_fp_write\n" );
 	
     fx2dev = (struct osrfx2 *)file->private_data;
 
@@ -523,6 +538,22 @@ error:
     return retval;
 }
 
+#if 0
+static unsigned int osrfx2_fp_poll ( struct file * file, poll_table * wait )
+{
+    struct osrfx2 * fx2dev = (struct osrfx2 *)file->private_data;
+    unsigned int mask = 0;
+    int retval = 0;
+
+//    poll_wait(file, &fx2dev->FieldEventQueue, wait);
+
+
+//    up( &fx2dev->sem );
+    
+    return mask;
+}
+#endif 
+
 /*
  In UNIX/LINUX world, from applicaiton perspective, eveything, including device,
  is a file. To communicate a device, applicaiton will open the file which
@@ -541,6 +572,7 @@ static struct file_operations osrfx2_fops = {
 	.llseek  = no_llseek,
 	.read    = osrfx2_fp_read,
 	.write   = osrfx2_fp_write,
+//	.poll    = osrfx2_fp_poll,
 };
 
 /* 
@@ -587,14 +619,14 @@ static int osrfx2_drv_probe (
 	dev_info ( &interface->dev, "--> osrfx2_drv_probe\n" );
 
 	/* allocate memory for our device context and initialize it */
-	fx2dev = kmalloc ( sizeof ( struct osrfx2 ), GFP_KERNEL );
-	if ( NULL == fx2dev ) {
-		err ( "Out of memory" );
+	fx2dev = kzalloc ( sizeof ( struct osrfx2 ), GFP_KERNEL );
+	if ( !fx2dev ) {
+		dev_err ( &interface->dev, "Out of memory\n" );
 		goto error;
 	}
-
-	memset ( fx2dev, 0x00, sizeof (*fx2dev) );
 	kref_init ( &(fx2dev->kref) );
+    mutex_init ( &(fx2dev->io_mutex) );
+
 	/* store our device and interface pointers for later usage */
 	fx2dev->udev = usb_get_dev ( interface_to_usbdev ( interface ) );
 	fx2dev->interface = interface;
@@ -650,7 +682,8 @@ static int osrfx2_drv_probe (
 	retval = usb_register_dev ( interface, &osrfx2_class );
 	if ( retval ) {
 		/* something prevented us from registering this driver */
-		err("Not able to register and get a minor for this device.");
+		dev_err ( &interface->dev,
+		          "Not able to register and get a minor for this device.\n" );
 		usb_set_intfdata ( interface, NULL );
 		goto error;
 	}
@@ -662,6 +695,7 @@ static int osrfx2_drv_probe (
 
 error:
 	if ( fx2dev )
+		/* this frees allocated memory */
 		kref_put ( &fx2dev->kref, osrfx2_delete );
 	return retval;
 }
@@ -669,18 +703,20 @@ error:
 /*
  The disconnect function is called when the driver should no longer control 
  the device for some reason and can do clean-up.
+
+ If you read the ldd3 book sample, the skel_disconnect() used 
+ lock_kernel/unlock_kernel to prevent xxx_open() from racing xxx_disconnect().
+ Since BKL was removed since 2.6.39 ( @http://kernelnewbies.org/BigKernelLock ),
+ to catch up the usb_skeleton.c since 2.6.32, we now use a mutex instead.
  */
 static void osrfx2_drv_disconnect ( struct usb_interface *interface )
 {
-	struct osrfx2 *dev;
+	struct osrfx2 *fx2dev;
 	int minor = interface->minor;
 
 	dev_info ( &interface->dev, "--> osrfx2_drv_disconnect\n" );
 
-	/* prevent osrfx2_open() from racing osrfx2_disconnect() */
-	lock_kernel();
-
-	dev = usb_get_intfdata ( interface );
+	fx2dev = usb_get_intfdata ( interface );
 	usb_set_intfdata ( interface, NULL );
 
 	/* remove bargraph attribute from the sysfs */
@@ -689,12 +725,15 @@ static void osrfx2_drv_disconnect ( struct usb_interface *interface )
 	/* give back our minor */
 	usb_deregister_dev ( interface, &osrfx2_class );
 
-	unlock_kernel();
+    /* prevent more I/O from starting */
+    mutex_lock ( &fx2dev->io_mutex );
+    fx2dev->interface = NULL;
+    mutex_unlock ( &fx2dev->io_mutex );
 
 	/* decrement our usage count */
-	kref_put ( &dev->kref, osrfx2_delete );
+	kref_put ( &fx2dev->kref, osrfx2_delete );
 
-	printk ( KERN_INFO "osrfx2_%d now disconnected\n", minor );
+	dev_info ( &interface->dev, "osrfx2_%d now disconnected\n", minor );
 }
 
 /*
@@ -732,12 +771,12 @@ static int __init osrfx2_init(void)
 {
 	int result;
 
-	printk ( KERN_INFO "--> osrfx2_init\n" );
+	pr_info ( "--> osrfx2_init\n" );
 
 	/* register this driver with the USB subsystem */
 	result = usb_register(&osrfx2_driver);
 	if (result)
-		printk ( KERN_ERR "usb_register failed. Error number %d\n", result );
+		pr_err ( "usb_register failed. Error number %d\n", result );
 
 	return result;
 }
@@ -748,10 +787,10 @@ static int __init osrfx2_init(void)
  */
 static void __exit osrfx2_exit(void)
 {
-	printk ( KERN_INFO "--> osrfx2_exit\n" );
+	pr_info ( "--> osrfx2_exit\n" );
 	
 	/* deregister this driver with the USB subsystem */
-	usb_deregister(&osrfx2_driver);
+	usb_deregister ( &osrfx2_driver );
 }
 
 /*****************************************************************************/

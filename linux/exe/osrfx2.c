@@ -627,50 +627,68 @@ Return Value:
     printf("\n****** END DUMP LEN decimal %d, 0x%x\n", len,len);
 }
 
-void ReadWrite ( )
+int ReadWrite_Init ( int* p_wfd,
+	                 int* p_rfd,
+	                 unsigned char** pp_InBuf,
+	                 unsigned char** pp_OutBuf )
 {
-    int wfd = -1; // write file descriptor
+	int result = 0;
+
+	int wfd = -1; // write file descriptor
     int rfd = -1; // read file descriptor
 
     unsigned char * pInBuf = NULL;
     unsigned char * pOutBuf = NULL;
-    ssize_t wlen;
-    ssize_t rlen;
 
-    int i;
+	/* if need to dump data, round the write/read length */
+	if (G_fRead) {
+		if ( G_fDumpReadData ) { 
+			// round size to sizeof ULONG for readable dumping
+			while( G_ReadLen % sizeof( ULONG ) ) {
+	    		G_ReadLen++;
+			}
+		}
+	}
 
-    if (G_fRead) {
-        if ( G_fDumpReadData ) { // round size to sizeof ULONG for readable dumping
-            while( G_ReadLen % sizeof( ULONG ) ) {
-                G_ReadLen++;
-            }
-        }
-    }
+	if (G_fWrite) {
+		if ( G_fDumpReadData ) { 
+			// round size to sizeof ULONG for readable dumping
+			while( G_WriteLen % sizeof( ULONG ) ) {
+				G_WriteLen++;
+			}
+		}
+	}
 
-    if (G_fWrite) {
-        if ( G_fDumpReadData ) { // round size to sizeof ULONG for readable dumping
-            while( G_WriteLen % sizeof( ULONG ) ) {
-                G_WriteLen++;
-            }
-        }
-    }
-
-//    wfd = open ( gDevPath, O_WRONLY | O_NONBLOCK );
-	wfd = open ( gDevPath, O_WRONLY );
+	/* open the device for read and write */
+	if ( G_fPerformBlockingIo ) {
+	    wfd = open ( gDevPath, O_WRONLY );
+	}
+	else {
+	    wfd = open ( gDevPath, O_WRONLY | O_NONBLOCK );
+	}
     if ( -1 == wfd ) {
         fprintf ( stderr, "open for write: %s failed\n", gDevPath );
+		result = -1;
         goto exit;
     }
 
-//    rfd = open ( gDevPath, O_RDONLY | O_NONBLOCK );
-    rfd = open ( gDevPath, O_RDONLY );
+	if ( G_fPerformBlockingIo ) {
+	    rfd = open ( gDevPath, O_RDONLY );
+	}
+	else {
+		rfd = open ( gDevPath, O_RDONLY | O_NONBLOCK );
+	}
     if ( -1 == rfd ) {
         fprintf ( stderr, "open for read: %s failed\n", gDevPath );
         goto exit;
     }
 
+	/* allocate buffer for read/write */
 	pInBuf = malloc(G_ReadLen);
-	if ( NULL == pInBuf ) goto exit;
+	if ( NULL == pInBuf ) {
+		result = -1;
+		goto exit;
+	}
     
     pOutBuf = malloc(G_WriteLen);
     if ( NULL != pOutBuf ) {
@@ -682,7 +700,134 @@ void ReadWrite ( )
 	        *(pOut+j) = j;
     	}
     }
-    else goto exit;
+    else {
+    	result = -1;
+    	goto exit;
+    }
+
+exit:
+	if ( 0 != result ) {
+		if ( wfd > 0 ) close ( wfd );
+	    if ( rfd > 0 ) close ( rfd );
+
+		if ( NULL != pInBuf ) free ( pInBuf );
+		if ( NULL != pOutBuf ) free ( pOutBuf );
+	}
+	else {
+		*p_wfd = wfd;
+		*p_rfd = rfd;
+		*pp_InBuf = pInBuf;
+		*pp_OutBuf = pOutBuf;
+	}
+
+	return result;	
+}
+
+void ReadWrite_Blocking ( )
+{
+    int wfd = -1; // write file descriptor
+    int rfd = -1; // read file descriptor
+
+    unsigned char * pInBuf = NULL;
+    unsigned char * pOutBuf = NULL;
+    ssize_t wlen;
+    ssize_t rlen;
+
+    int i;
+
+	if ( 0 != ReadWrite_Init ( &wfd, &rfd, &pInBuf, &pOutBuf ) ) {
+		fprintf ( stderr, "Read Write init error\n" );
+		return;
+	}
+
+    for ( i = 0; i < G_IterationCount; i++ ) {
+
+        if ( G_fWrite ) {
+            //
+            // send the write
+            //
+			wlen = write ( wfd, pOutBuf, G_WriteLen );
+            if ( wlen < 0 ) {
+                fprintf ( stderr, "write error\n");
+                goto exit;
+            }
+            printf ("Write (%04d) : request %06d bytes -- %06d bytes written\n",
+                    i, G_WriteLen, wlen );
+            assert ( wlen == G_WriteLen );
+        }
+
+        if ( G_fRead ) {
+
+            int index = 0;
+
+            do {
+                rlen = read ( rfd, &pInBuf[index], (G_ReadLen - index) );
+                if ( rlen < 0 ) {
+                    fprintf ( stderr, "read error\n" );
+                    goto exit;
+                }
+                printf("Read (%04d)(%04d) : request %06d bytes -- %06d bytes read\n",
+                   i, index, (G_ReadLen - index), rlen );
+
+                index += rlen;
+
+            } while ( index < G_ReadLen );
+            assert ( index == G_ReadLen );
+
+            if (G_fWrite) {
+
+                /* validate the input buffer against what
+                 * we sent
+                 * Till we arrive here, we have asserted length of
+                 * read should be G_ReadLen and that of write should
+               	 * be G_WriteLen
+               	 */
+                if ( memcmp ( pOutBuf, pInBuf, G_WriteLen ) != 0 ) {
+                	fprintf ( stderr, "Mismatch error between buffer contents!\n" );
+	            }
+                else {
+                	printf ( "\nMatched between Write and Read!\n" );
+                }
+
+                if( G_fDumpReadData ) {
+                    printf ( "\nDumping read buffer ...\n" );
+                    Dump ( pInBuf,  G_ReadLen );
+                    printf ( "\nDumping write buffer ...\n" );
+                    Dump ( pOutBuf, G_WriteLen );
+                }
+            }
+        }
+    }
+
+
+
+exit:
+	if ( wfd > 0 ) close ( wfd );
+    if ( rfd > 0 ) close ( rfd );
+
+	if ( NULL != pInBuf ) free ( pInBuf );
+	if ( NULL != pOutBuf ) free ( pOutBuf );
+}
+
+void ReadWrite_NoBlocking ( )
+{
+    int wfd = -1; // write file descriptor
+    int rfd = -1; // read file descriptor
+
+    unsigned char * pInBuf = NULL;
+    unsigned char * pOutBuf = NULL;
+    ssize_t wlen;
+    ssize_t rlen;
+
+    struct pollfd pollfds[2];
+    int timeout = 5000;
+
+    int i;
+
+	if ( 0 != ReadWrite_Init ( &wfd, &rfd, &pInBuf, &pOutBuf ) ) {
+		fprintf ( stderr, "Read Write init error\n" );
+		return;
+	}
 
     for ( i = 0; i < G_IterationCount; i++ ) {
 
@@ -780,7 +925,15 @@ int main ( int argc, char ** argv )
 
     // doing a read, write, or both test
     if ((G_fRead) || (G_fWrite)) {
-    	ReadWrite ( );
+
+		if ( G_fPerformBlockingIo ) {
+			printf ( "Starting read/write with Blocking I/O ... \n\n" );
+	    	ReadWrite_Blocking ( );
+		}	
+		else {
+			printf ( "Starting read/write with NoBlocking I/O ... \n\n" );
+			ReadWrite_NoBlocking();
+		}
     }
 
     /*

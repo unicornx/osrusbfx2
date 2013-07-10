@@ -33,7 +33,7 @@
  export it to userspace using MODULE_DEVICE_TABLE(), and provide it to 
  the USB core through usb_driver structure - when registering the driver.
  */
-static struct usb_device_id osrfx2_table [] = {
+static const struct usb_device_id osrfx2_table [] = {
 	{ USB_DEVICE(OSRFX2_VENDOR_ID, OSRFX2_PRODUCT_ID) },
 	{ }					/* Terminating entry */
 };
@@ -120,12 +120,12 @@ static int __init osrfx2_init(void)
 {
 	int result;
 
-	printk ( KERN_INFO "--> osrfx2_init\n" );
+	pr_info ( "--> osrfx2_init\n" );
 
 	/* register this driver with the USB subsystem */
 	result = usb_register(&osrfx2_driver);
 	if (result)
-		printk ( KERN_ERR "usb_register failed. Error number %d\n", result );
+		pr_err ( "usb_register failed. Error number %d\n", result );
 
 	return result;
 }
@@ -136,10 +136,10 @@ static int __init osrfx2_init(void)
  */
 static void __exit osrfx2_exit(void)
 {
-	printk ( KERN_INFO "--> osrfx2_exit\n" );
+	pr_info ( "--> osrfx2_exit\n" );
 	
 	/* deregister this driver with the USB subsystem */
-	usb_deregister(&osrfx2_driver);
+	usb_deregister ( &osrfx2_driver );
 }
 
 /*****************************************************************************/

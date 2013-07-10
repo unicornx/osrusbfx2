@@ -21,6 +21,9 @@ https://github.com/gregkh - Greg Kroah-Hartman's github
 
 #Chapter2:#
 
+about Linux header story:<linux 内核完全剖析>有关内核头文件变化请参考 http://www.linuxsir.org/bbs/showthread.php?t=303531
+
+
 Makefile的理解，参考http://www.ibm.com/developerworks/cn/linux/l-module26/
 
 
@@ -141,6 +144,15 @@ echo 8 > /proc/sys/kernel/printk
 
 ##通过监视调试##
 strace命令的使用，它可以显示由用户空间程序发出的所有系统调用。不仅显示调用，还能显示调用参数以及用符号形式表示的返回值。
+
+
+#Chapter5:
+new kernel prefer mutex than semaphore,
+The mutex API: http://lwn.net/Articles/167034/
+
+About complete: http://blog.csdn.net/iamonlyme/article/details/7179712
+Note the done flag 用于处理“在进程开始等待之前，事件或操作已经完成. 每次调用complete，done计数器都会+1，仅当done=0时，wait_for系列函数才会使得调用进程睡眠。
+
 
 #Chapter8 need read more
 
