@@ -56,6 +56,11 @@ clean:
 	$(MAKE) -C osrbulk        -f Makefile clean
 	$(MAKE) -C osrfx2         -f Makefile clean
 	$(MAKE) -C switch_events  -f Makefile clean
+	$(MAKE) -C step1          -f Makefile clean
+	$(MAKE) -C step2          -f Makefile clean
+	$(MAKE) -C step3          -f Makefile clean
+	$(MAKE) -C step4          -f Makefile clean
+	$(MAKE) -C exe            -f Makefile clean
 
 #------------------------------------------------------------------------------
 # Install components
