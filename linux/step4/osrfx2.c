@@ -27,6 +27,16 @@
 #define WRITES_IN_FLIGHT        8
 /* arbitrarily chosen */
 
+#define OSRFX2_DEBUG 0
+#define DEBUG // $$$TBD temp for test
+#ifdef DEBUG
+static int debug = OSRFX2_DEBUG;
+#define dbg_info(dev, format, arg...) do \
+    { if (debug) dev_info(dev , format , ## arg); } while (0)
+#else
+#define dbg_info(dev, format, arg...)
+#endif //DEBUG
+
 /* 
  Table of devices that work with this driver.
  The struct usb_device_id structure is used to define a list of the different
@@ -71,81 +81,36 @@ MODULE_DEVICE_TABLE (usb, osrfx2_table);
  */
 struct osrfx2 {
 
-    struct usb_device     *udev;                    /* the usb device for this device */
-    struct usb_interface  *interface;               /* the interface for this usb device
+	/* common attributes */
+    struct usb_device      *udev;                   /* the usb device for this device */
+    struct usb_interface   *interface;              /* the interface for this usb device
                                                       Note, for osrfx2 device, it has only
                                                       one interface.
                                                     */
     struct kref            kref;                    /* Refrence counter for a device */
-
 	struct mutex           io_mutex;                /* synchronize I/O with disconnect */
-
-	/* USB Endpoint Address */
-    __u8  bulk_in_endpointAddr;                     /* the address of the bulk in endpoint */
-    __u8  bulk_out_endpointAddr;                    /* the address of the bulk out endpoint */
-
-    /* USB Endpoint Max Packet Size */
-    size_t bulk_in_size;                            /* the size of the receive buffer */
-    size_t bulk_out_size;                           /* the size of the send buffer */
-
-	/* Transfer Buffers */
-    unsigned char *bulk_in_buffer;                  /* the buffer to receive data */
-    unsigned char *bulk_out_buffer;                 /* the buffer to send data */
-
-    /* URBs */
-    struct urb *bulk_in_urb;                        /* the urb to read data with */
-    struct usb_anchor       submitted;              /* in case we need to retract our submissions */
-
-    /* read & write */
-    struct semaphore        limit_sem;              /* limiting the number of writes in progress */
-    bool                    ongoing_read;           /* flag a read is going on */
-    wait_queue_head_t       bulk_in_wait;           /* to wait for an ongoing read */    
-
+    struct usb_anchor      submitted;               /* in case we need to retract our submissions */
 	/* error status */
-    int                     errors;                 /* the last request tanked */    
-    spinlock_t              err_lock;               /* lock for errors */
+    int                    errors;                  /* the last request tanked */    
+    spinlock_t             err_lock;                /* lock for errors */
+
+	/* USB Bulk IN endpoint */
+    __u8                   bulk_in_endpointAddr;    /* the address of the bulk in endpoint */
+    size_t                 bulk_in_size;            /* max packet size of the receive buffer */
+    unsigned char          *bulk_in_buffer;         /* the buffer to receive data */
+    struct urb             *bulk_in_urb;            /* the urb to read data with */
+    bool                   ongoing_read;            /* flag a read is going on */
+    wait_queue_head_t      bulk_in_wait;            /* to wait for an ongoing read */
+    size_t                 bulk_in_filled;          /* number of bytes in the buffer */
+    size_t                 bulk_in_copied;          /* already copied to user space */
+
+	/* USB Bulk OUT endpoint */
+    __u8                   bulk_out_endpointAddr;   /* the address of the bulk out endpoint */
+    size_t                 bulk_out_size;           /* the size of the send buffer */
+    unsigned char          *bulk_out_buffer;        /* the buffer to send data */
+    struct semaphore       limit_sem;               /* limiting the number of writes in progress */
+   
 };
-
-/**
- * init bulk ep related stuff
- */
-static int osrfx2_init_bulks ( struct osrfx2 * fx2dev )
-{
-    fx2dev->bulk_in_buffer = kmalloc ( fx2dev->bulk_in_size, GFP_KERNEL );
-    if ( !fx2dev->bulk_in_buffer ) {
-        return -ENOMEM;
-    }
-    fx2dev->bulk_out_buffer = kmalloc(fx2dev->bulk_out_size, GFP_KERNEL);
-    if ( !fx2dev->bulk_out_buffer ) {
-        return -ENOMEM;
-    }
-
-    return 0;
-}
-
-static void osrfx2_delete ( struct kref *kref )
-{	
-	struct osrfx2 *fx2dev;
-
-	pr_info ( "--> osrfx2_delete\n" );
-
-	/* use macro container_of to find the appropriate device structure */
-	fx2dev = container_of ( kref, struct osrfx2, kref );
-		
-    /* release a use of the usb device structure */
-	usb_put_dev ( fx2dev->udev );
-
-	/* free device context memory */
-    if ( fx2dev->bulk_in_buffer ) {
-        kfree( fx2dev->bulk_in_buffer );
-    }
-    if ( fx2dev->bulk_out_buffer ) {
-        kfree( fx2dev->bulk_out_buffer );
-    }
-
-    /* free device context memory */
-	kfree ( fx2dev );
-}
 
 /**
  * This routine will attempt to find the required endpoints and 
@@ -195,6 +160,116 @@ static int osrfx2_find_endpoints ( struct osrfx2 * fx2dev )
 }
 
 /**
+ * constructor of osrfx2 device
+ */
+static int osrfx2_new ( struct osrfx2 **fx2devOut, 
+                        struct usb_interface *interface )
+{
+	int retval = 0;
+	struct osrfx2 *fx2dev = NULL;
+	
+	/* allocate memory for our device context and initialize it */
+	fx2dev = kzalloc ( sizeof ( struct osrfx2 ), GFP_KERNEL );
+	if ( !fx2dev ) {
+		dev_err ( &interface->dev, "Out of memory\n" );
+		retval = -ENOMEM;
+		goto exit;
+	}
+
+	/* common attributes */
+	kref_init ( &(fx2dev->kref) );
+    mutex_init ( &(fx2dev->io_mutex) );
+    init_usb_anchor(&fx2dev->submitted);
+    spin_lock_init(&fx2dev->err_lock);
+	/* store our device and interface pointers for later usage */
+	fx2dev->udev = usb_get_dev ( interface_to_usbdev ( interface ) );
+	fx2dev->interface = interface;
+
+	/* probe and find the endpoints we require */
+	retval = osrfx2_find_endpoints ( fx2dev );
+    if ( 0 != retval ) 
+        goto exit;
+
+    /* setup other attributes related to the endpoints we care */
+    /* Bulk IN */
+    fx2dev->bulk_in_buffer = kmalloc ( fx2dev->bulk_in_size, GFP_KERNEL );
+    if ( !fx2dev->bulk_in_buffer ) {
+    	dev_err( &(fx2dev->interface->dev),
+    		"Could not allocate bulk_in_buffer\n" );
+        retval = -ENOMEM;
+        goto exit;
+    }
+	fx2dev->bulk_in_urb = usb_alloc_urb ( 0, GFP_KERNEL );
+	if ( !fx2dev->bulk_in_urb ) {
+	    dev_err( &(fx2dev->interface->dev),
+            "Could not allocate bulk_in_urb\n");
+	    retval = -ENOMEM;
+	    goto exit;
+	}
+    init_waitqueue_head(&fx2dev->bulk_in_wait);
+    
+	/* Bulk OUT */
+    fx2dev->bulk_out_buffer = kmalloc(fx2dev->bulk_out_size, GFP_KERNEL);
+    if ( !fx2dev->bulk_out_buffer ) {
+    	dev_err( &(fx2dev->interface->dev),
+    		"Could not allocate bulk_out_buffer\n" );
+        retval = -ENOMEM;
+        goto exit;
+    }
+    sema_init(&fx2dev->limit_sem, WRITES_IN_FLIGHT);
+    
+exit:
+	if ( retval < 0 ) {
+		*fx2devOut = NULL;
+		/* leave other deconstruct in osrfx2_delete() */
+	}
+	else {
+		*fx2devOut = fx2dev;
+	}
+    return retval;
+}
+
+/**
+ * de-constructor of the osrfx2 device
+ */
+static void osrfx2_delete ( struct kref *kref )
+{	
+	/* use macro container_of to find the appropriate device structure */
+	struct osrfx2 *fx2dev = container_of ( kref, struct osrfx2, kref );
+
+    dev_info ( &(fx2dev->interface->dev), "--> osrfx2_delete\n" );
+		
+    /* release a use of the usb device structure */
+	usb_put_dev ( fx2dev->udev );
+
+	/* free device context memory */
+	/* free Bulk IN memory */
+    if ( fx2dev->bulk_in_buffer ) {
+        kfree( fx2dev->bulk_in_buffer );
+    }
+    if ( fx2dev->bulk_in_urb ) {
+    	usb_free_urb ( fx2dev->bulk_in_urb );
+    }
+    /* free Bulk OUT memory */
+    if ( fx2dev->bulk_out_buffer ) {
+        kfree( fx2dev->bulk_out_buffer );
+    }
+
+    /* free device context memory */
+	kfree ( fx2dev );
+}
+
+static void osrfx2_draw_down ( struct osrfx2 *dev )
+{
+    int time;
+
+    time = usb_wait_anchor_empty_timeout ( &dev->submitted, 1000 );
+    if ( !time )
+            usb_kill_anchored_urbs ( &dev->submitted );
+    usb_kill_urb ( dev->bulk_in_urb );
+}
+
+/**
  * We choose use sysfs attribte to read/write io data. More details please 
  * refer to http://www.ibm.com/developerworks/cn/linux/l-cn-sysfs/#resources
  * 
@@ -213,42 +288,41 @@ static ssize_t osrfx2_attr_bargraph_get (
     struct bargraph_state * packet;
     int retval;
 
-	pr_info ( "--> osrfx2_attr_bargraph_get\n" );
+	dev_info ( dev, "--> osrfx2_attr_bargraph_get\n" );
 		
-    packet = kmalloc(sizeof(*packet), GFP_KERNEL);
-    if (!packet) {
+    packet = kzalloc ( sizeof(*packet), GFP_KERNEL );
+    if ( !packet ) {
         return -ENOMEM;
     }
-    packet->BarsOctet = 0;
 
-    retval = usb_control_msg(fx2dev->udev, 
-                             usb_rcvctrlpipe(fx2dev->udev, 0), 
-                             OSRFX2_READ_BARGRAPH_DISPLAY, 
-                             USB_DIR_IN | USB_TYPE_VENDOR,
-                             0,
-                             0,
-                             packet, 
-                             sizeof(*packet),
-                             USB_CTRL_GET_TIMEOUT);
+    retval = usb_control_msg ( fx2dev->udev, 
+                               usb_rcvctrlpipe ( fx2dev->udev, 0 ), 
+                               OSRFX2_READ_BARGRAPH_DISPLAY, 
+                               USB_DIR_IN | USB_TYPE_VENDOR,
+                               0,
+                               0,
+                               packet, 
+                               sizeof(*packet),
+                               USB_CTRL_GET_TIMEOUT );
 
-    if (retval < 0) {
-        dev_err(&fx2dev->udev->dev, "%s - retval=%d\n", 
-                __FUNCTION__, retval);
-        kfree(packet);
+    if ( retval < 0 ) {
+        dev_err ( dev, "%s - retval=%d\n", 
+                __FUNCTION__, retval );
+        kfree ( packet );
         return retval;
     }
 
-    retval = sprintf(buf, "%s%s%s%s%s%s%s%s",    /* bottom LED --> top LED */
-                     (packet->Bar1) ? "*" : ".",
-                     (packet->Bar2) ? "*" : ".",
-                     (packet->Bar3) ? "*" : ".",
-                     (packet->Bar4) ? "*" : ".",
-                     (packet->Bar5) ? "*" : ".",
-                     (packet->Bar6) ? "*" : ".",
-                     (packet->Bar7) ? "*" : ".",
-                     (packet->Bar8) ? "*" : "." );
+    retval = sprintf( buf, "%s%s%s%s%s%s%s%s",    /* bottom LED --> top LED */
+                      (packet->Bar1) ? "*" : ".",
+                      (packet->Bar2) ? "*" : ".",
+                      (packet->Bar3) ? "*" : ".",
+                      (packet->Bar4) ? "*" : ".",
+                      (packet->Bar5) ? "*" : ".",
+                      (packet->Bar6) ? "*" : ".",
+                      (packet->Bar7) ? "*" : ".",
+                      (packet->Bar8) ? "*" : "." );
 
-    kfree(packet);
+    kfree ( packet );
 
     return retval;
 }
@@ -271,35 +345,34 @@ static ssize_t osrfx2_attr_bargraph_set (
     int retval;
     char * end;
 
-   	pr_info ( "--> osrfx2_attr_bargraph_set\n" );
+   	dev_info ( dev, "--> osrfx2_attr_bargraph_set\n" );
 
-    packet = kmalloc(sizeof(*packet), GFP_KERNEL);
-    if (!packet) {
+    packet = kzalloc ( sizeof(*packet), GFP_KERNEL );
+    if ( !packet ) {
         return -ENOMEM;
     }
-    packet->BarsOctet = 0;
 
 	packet->BarsOctet = (unsigned char)(simple_strtoul(buf, &end, 10) & 0xFF);
-    if (buf == end) {
+    if ( buf == end ) {
         packet->BarsOctet = 0;
     }
 
-    retval = usb_control_msg(fx2dev->udev, 
-                             usb_sndctrlpipe(fx2dev->udev, 0), 
-                             OSRFX2_SET_BARGRAPH_DISPLAY, 
-                             USB_DIR_OUT | USB_TYPE_VENDOR,
-                             0,
-                             0,
-                             packet, 
-                             sizeof(*packet),
-                             USB_CTRL_GET_TIMEOUT);
+    retval = usb_control_msg ( fx2dev->udev, 
+                               usb_sndctrlpipe(fx2dev->udev, 0), 
+                               OSRFX2_SET_BARGRAPH_DISPLAY, 
+                               USB_DIR_OUT | USB_TYPE_VENDOR,
+                               0,
+                               0,
+                               packet, 
+                               sizeof(*packet),
+                               USB_CTRL_GET_TIMEOUT );
 
-    if (retval < 0) {
-        dev_err(&fx2dev->udev->dev, "%s - retval=%d\n", 
-                __FUNCTION__, retval);
+    if ( retval < 0 ) {
+        dev_err ( dev, "%s - retval=%d\n", 
+                __FUNCTION__, retval );
     }
     
-    kfree(packet);
+    kfree ( packet );
 
     return count;
 }
@@ -342,17 +415,14 @@ static int osrfx2_fp_open ( struct inode *inode, struct file *file )
 	int subminor;
 	int retval = 0;
 
-	pr_info ( "--> osrfx2_fp_open\n" );
-
 	subminor = iminor(inode);
 	interface = usb_find_interface ( &osrfx2_driver, subminor );
 	if ( !interface ) {
-		pr_err ( "%s - error, can't find device for minor %d",
-		     __FUNCTION__, subminor );
+		pr_err ( "--> osrfx2_fp_open error, can't find device for minor %d\n", subminor );
 		retval = -ENODEV;
 		goto exit;
 	}
-	dev_info ( &interface->dev, "find device for minor %d\n", subminor );
+	dev_info ( &interface->dev, "--> osrfx2_fp_open for minor %d\n", subminor );
 
 	dev = usb_get_intfdata ( interface );
 	if ( !dev ) {
@@ -387,18 +457,114 @@ exit:
  */
 static int osrfx2_fp_release ( struct inode *inode, struct file *file )
 {
-	struct osrfx2 *dev;
+	struct osrfx2 *fx2dev;
 
-	pr_info ( "--> osrfx2_fp_release\n" );
-	
-	dev = (struct osrfx2 *)file->private_data;
-	if ( NULL == dev )
+	fx2dev = (struct osrfx2 *)file->private_data;
+	if ( NULL == fx2dev ) {
+		pr_err ( "--> osrfx2_fp_release, but get device failed!\n" );
 		return -ENODEV;
-
+	}
+	dev_info ( &(fx2dev->interface->dev), "--> osrfx2_fp_release for minor %d\n", iminor(inode) );
+	
 	/* decrement the count on our device */
-	kref_put ( &dev->kref, osrfx2_delete );
+	kref_put ( &fx2dev->kref, osrfx2_delete );
 	
 	return 0;
+}
+
+static int osrfx2_fp_flush ( struct file *file, fl_owner_t id )
+{
+    struct osrfx2 *fx2dev;
+    int res;
+
+    fx2dev = file->private_data;
+    if ( NULL == fx2dev )
+            return -ENODEV;
+
+    mutex_lock ( &fx2dev->io_mutex );
+
+    /* wait for io to stop */
+    osrfx2_draw_down ( fx2dev );
+
+    /* read out errors, leave subsequent opens a clean slate */
+    spin_lock_irq ( &fx2dev->err_lock );
+    res = fx2dev->errors ? ( fx2dev->errors == -EPIPE ? -EPIPE : -EIO ) : 0;
+    fx2dev->errors = 0;
+    spin_unlock_irq ( &fx2dev->err_lock );
+
+    mutex_unlock ( &fx2dev->io_mutex );
+
+    return res;
+}
+
+static void osrfx2_fp_read_bulk_callback ( struct urb *urb )
+{
+    struct osrfx2 *fx2dev = urb->context;
+
+    if ( !fx2dev ) {
+   		pr_err ( "--> osrfx2_fp_read_bulk_callback error, can't find device.\n" );
+		return;
+    }
+	dev_info ( &(fx2dev->interface->dev), "--> osrfx2_fp_read_bulk_callback\n" );
+
+    spin_lock ( &fx2dev->err_lock );
+
+    /* sync/async unlink faults aren't errors */
+    if ( urb->status ) {
+        if ( ! ( urb->status == -ENOENT ||
+	             urb->status == -ECONNRESET ||
+	             urb->status == -ESHUTDOWN ) )
+            dev_err ( &(fx2dev->interface->dev),
+	                  "%s - nonzero write bulk status received: %d\n",
+	                    __func__, urb->status );
+
+        fx2dev->errors = urb->status;
+    } 
+    else {
+        fx2dev->bulk_in_filled = urb->actual_length;
+    }
+    fx2dev->ongoing_read = 0;
+
+    spin_unlock ( &fx2dev->err_lock );
+
+    wake_up_interruptible ( &fx2dev->bulk_in_wait );
+}
+
+static int osrfx2_fp_read_submit_urb ( struct osrfx2 *fx2dev, size_t count )
+{
+    int rv;
+
+    /* prepare a read URB */
+    usb_fill_bulk_urb ( fx2dev->bulk_in_urb,
+                        fx2dev->udev,
+                        usb_rcvbulkpipe ( fx2dev->udev,
+                            fx2dev->bulk_in_endpointAddr ),
+                        fx2dev->bulk_in_buffer,
+                        min(fx2dev->bulk_in_size, count),
+                        osrfx2_fp_read_bulk_callback,
+                        fx2dev );
+    /* tell everybody to leave the URB alone */
+    spin_lock_irq (&fx2dev->err_lock );
+    fx2dev->ongoing_read = 1;
+    spin_unlock_irq ( &fx2dev->err_lock );
+
+    /* submit bulk in urb, which means no data to deliver */
+    fx2dev->bulk_in_filled = 0;
+    fx2dev->bulk_in_copied = 0;
+
+    /* submit it */
+    rv = usb_submit_urb ( fx2dev->bulk_in_urb, GFP_KERNEL );
+    if (rv < 0) {
+        dev_err ( &fx2dev->interface->dev,
+                  "%s - failed submitting read urb, error %d\n",
+                  __func__, rv );
+        rv = (rv == -ENOMEM) ? rv : -EIO;
+        spin_lock_irq ( &fx2dev->err_lock );
+        fx2dev->ongoing_read = 0;
+        spin_unlock_irq ( &fx2dev->err_lock );
+    }
+
+    return rv;
 }
 
 static ssize_t osrfx2_fp_read ( 
@@ -408,61 +574,154 @@ static ssize_t osrfx2_fp_read (
     loff_t * ppos )
 {
     struct osrfx2 * fx2dev;
-    int retval = 0;
-    int bytes_read;
-    int pipe;
+    int rv = 0;
+    bool ongoing_io;
 
-	pr_info ( "--> osrfx2_fp_read\n" );    
+	fx2dev = ( struct osrfx2* ) file->private_data;
+    if ( !fx2dev ) {
+   		pr_err ( "--> osrfx2_fp_read error, can't find device.\n" );
+		return -ENODEV;
+    }
+	dev_info ( &(fx2dev->interface->dev), "--> osrfx2_fp_read, count=%d\n", count );
 
-    fx2dev = ( struct osrfx2* ) file->private_data;
+    /* if we cannot read at all, return EOF */
+    if ( !fx2dev->bulk_in_urb || !count )
+	    return 0;
 
-    pipe = usb_rcvbulkpipe ( fx2dev->udev, fx2dev->bulk_in_endpointAddr ),
+    /* no concurrent readers */
+    rv = mutex_lock_interruptible ( &fx2dev->io_mutex );
+    if ( rv < 0 )
+        return rv;
 
-    /* 
-     *  Do a blocking bulk read to get data from the device 
-     */
-    retval = usb_bulk_msg( fx2dev->udev, 
-                           pipe,
-                           fx2dev->bulk_in_buffer,
-                           min ( fx2dev->bulk_in_size, count ),
-                           &bytes_read, 
-                           HZ*10 );
-
-    /* 
-     *  If the read was successful, copy the data to userspace 
-     */
-    if (!retval) {
-        if ( copy_to_user ( buffer, fx2dev->bulk_in_buffer, bytes_read ) ) {
-            retval = -EFAULT;
-        }
-        else {
-            retval = bytes_read;
-        }
+    if ( !fx2dev->interface ) { /* disconnect() was called */
+        rv = -ENODEV;
+        goto exit;
     }
 
-    return retval;
+    /* if IO is under way, we must not touch things */
+retry:
+    spin_lock_irq ( &fx2dev->err_lock );
+    ongoing_io = fx2dev->ongoing_read;
+    spin_unlock_irq ( &fx2dev->err_lock );
+
+    if ( ongoing_io ) {
+    	dbg_info ( &(fx2dev->interface->dev), "read is on going\n" );
+    		
+        /* nonblocking IO shall not wait */
+        if ( file->f_flags & O_NONBLOCK ) {
+        	dbg_info ( &(fx2dev->interface->dev), "nonblock read, return -EAGAIN\n" );
+            rv = -EAGAIN;
+            goto exit;
+	    }
+        /*
+         * IO may take forever
+         * hence wait in an interruptible state
+         */
+        rv = wait_event_interruptible ( fx2dev->bulk_in_wait, (!fx2dev->ongoing_read) );
+        if ( rv < 0 )
+            goto exit;
+    }
+
+	/* errors must be reported */
+	rv = fx2dev->errors;
+	if ( rv < 0 ) {
+        /* any error is reported once */
+        dbg_info ( &(fx2dev->interface->dev), "any error (%d) is reported once\n", rv );
+        fx2dev->errors = 0;
+        /* to preserve notifications about reset */
+        rv = (rv == -EPIPE) ? rv : -EIO;
+        /* report it */
+        goto exit;
+	}
+
+    /*
+     * if the buffer is filled we may satisfy the read
+     * else we need to start IO
+     */
+    if ( fx2dev->bulk_in_filled ) {
+        /* we had read data */
+        size_t available = fx2dev->bulk_in_filled - fx2dev->bulk_in_copied;
+        size_t chunk = min ( available, count );
+		dbg_info ( &(fx2dev->interface->dev), "we had read data filled(%d), copied(%d), chunk(%d)\n", 
+			fx2dev->bulk_in_filled, fx2dev->bulk_in_copied, chunk );
+		
+        if ( !available ) {
+            /*
+             * all data has been used
+             * actual IO needs to be done
+             */
+//       		dbg_info ( &(fx2dev->interface.dev), "we had read data filled(%d), copied(%d), chunk(%d)\n", 
+            rv = osrfx2_fp_read_submit_urb ( fx2dev, count );
+            if ( rv < 0 )
+            	goto exit;
+            else
+                goto retry;
+    	}
+	    /*
+	     * data is available
+	     * chunk tells us how much shall be copied
+	     */
+
+	    if ( copy_to_user ( buffer,
+			                fx2dev->bulk_in_buffer + fx2dev->bulk_in_copied,
+                            chunk ) )
+            rv = -EFAULT;
+	    else
+            rv = chunk;
+
+    	fx2dev->bulk_in_copied += chunk;
+
+	    /*
+	     * if we are asked for more than we have,
+	     * we start IO but don't wait
+	     */
+	    if ( available < count ) {
+	        osrfx2_fp_read_submit_urb ( fx2dev, count - chunk );
+	    }
+    }
+    else {
+        /* no data in the buffer */
+        rv = osrfx2_fp_read_submit_urb ( fx2dev, count );
+        if ( rv < 0 )
+            goto exit;
+        else if ( !(file->f_flags & O_NONBLOCK) )
+            goto retry;
+        rv = -EAGAIN;
+    }
+exit:
+    mutex_unlock ( &fx2dev->io_mutex );
+    return rv;
 }
 
 static void osrfx2_fp_write_bulk_callback ( struct urb *urb )
 {
     struct osrfx2 * fx2dev = (struct osrfx2 *)urb->context;
 
-	pr_info ( "--> osrfx2_fp_write_bulk_callback\n" );
-	
+    if ( !fx2dev ) {
+   		pr_err ( "--> osrfx2_fp_write_bulk_callback error, can't find device.\n" );
+		return;
+    }
+	dev_info ( &(fx2dev->interface->dev), "--> osrfx2_fp_write_bulk_callback\n" );
+
 	/* sync/async unlink faults aren't errors */
     if ( urb->status && 
          ! ( urb->status == -ENOENT || 
              urb->status == -ECONNRESET ||
              urb->status == -ESHUTDOWN ) ) {
         dev_err ( &fx2dev->interface->dev,
-        	"%s - non-zero status received: %d\n", __FUNCTION__, urb->status );
+        	"%s - non-zero status received: %d\n", __func__, urb->status );
+
+		spin_lock ( &fx2dev->err_lock );
+		fx2dev->errors = urb->status;
+		spin_unlock ( &fx2dev->err_lock );
     }
 
    	/* free up our allocated buffer */
-    usb_buffer_free( urb->dev, 
-                     urb->transfer_buffer_length, 
+   	usb_buffer_free( urb->dev, 
+   		             urb->transfer_buffer_length,
                      urb->transfer_buffer, 
                      urb->transfer_dma );
+    up ( &fx2dev->limit_sem );
 }
 
 static ssize_t osrfx2_fp_write ( 
@@ -474,16 +733,48 @@ static ssize_t osrfx2_fp_write (
     struct osrfx2 * fx2dev;
     struct urb * urb = NULL;
     char * buf = NULL;
-    int pipe;
     int retval = 0;
+    size_t writesize = min(count, (size_t)MAX_TRANSFER);    
 
-	pr_info ( "--> osrfx2_fp_write\n" );
-	
     fx2dev = (struct osrfx2 *)file->private_data;
+    if ( !fx2dev ) {
+   		pr_err ( "--> osrfx2_fp_write error, can't find device.\n" );
+		return -ENODEV;
+    }
+	dev_info ( &(fx2dev->interface->dev), "--> osrfx2_fp_write, count=%d\n", count );
 
   	/* verify that we actually have some data to write */
     if ( 0 == count )
-        return count;
+        goto exit;
+
+    /*
+     * limit the number of URBs in flight to stop a user from using up all
+     * RAM
+     */
+    if ( !(file->f_flags & O_NONBLOCK) ) {
+        if ( down_interruptible ( &fx2dev->limit_sem ) ) {
+            retval = -ERESTARTSYS;
+            goto exit;
+        }
+    }
+    else {
+        if ( down_trylock ( &fx2dev->limit_sem ) ) {
+            retval = -EAGAIN;
+            goto exit;
+        }
+    }
+    
+    spin_lock_irq ( &fx2dev->err_lock );
+    retval = fx2dev->errors;
+    if ( retval < 0 ) {
+        /* any error is reported once */
+        fx2dev->errors = 0;
+        /* to preserve notifications about reset */
+        retval = (retval == -EPIPE) ? retval : -EIO;
+    }
+    spin_unlock_irq ( &fx2dev->err_lock );
+    if ( retval < 0 )
+        goto error;
 
     /* Create a urb, and a buffer for it, and copy the data to the urb. */
     urb = usb_alloc_urb ( 0, GFP_KERNEL );
@@ -492,49 +783,68 @@ static ssize_t osrfx2_fp_write (
         goto error;
     }
 
-    buf = usb_buffer_alloc( fx2dev->udev, 
-                            count, 
-                            GFP_KERNEL, 
-                            &urb->transfer_dma );
+    buf = usb_buffer_alloc ( fx2dev->udev, 
+                             writesize, 
+                             GFP_KERNEL, 
+                             &urb->transfer_dma );
     if ( !buf ) {
         retval = -ENOMEM;
         goto error;
     }
 
-    if ( copy_from_user ( buf, user_buffer, count ) ) {
+    if ( copy_from_user ( buf, user_buffer, writesize ) ) {
         retval = -EFAULT;
         goto error;
     }
 
-	/* initialize the urb properly */
-	pipe = usb_sndbulkpipe ( fx2dev->udev, fx2dev->bulk_out_endpointAddr );
-    usb_fill_bulk_urb( urb, 
-                       fx2dev->udev,
-                       pipe,
-                       buf, 
-                       count, 
-                       osrfx2_fp_write_bulk_callback, 
-                       fx2dev );
-    urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
+    /* this lock makes sure we don't submit URBs to gone devices */
+    mutex_lock ( &fx2dev->io_mutex );
 
-	/* send the data out the bulk port */
-	retval = usb_submit_urb ( urb, GFP_KERNEL );
-    if ( retval ) {
-        dev_err ( &fx2dev->interface->dev, "%s - usb_submit_urb failed: %d\n",
-        	__FUNCTION__, retval);
+    if ( !fx2dev->interface ) { /* disconnect() was called */
+        mutex_unlock ( &fx2dev->io_mutex );
+        retval = -ENODEV;
         goto error;
     }
 
+	/* initialize the urb properly */
+    usb_fill_bulk_urb( urb, 
+                       fx2dev->udev,
+                       usb_sndbulkpipe ( fx2dev->udev, fx2dev->bulk_out_endpointAddr ),
+                       buf, 
+                       writesize, 
+                       osrfx2_fp_write_bulk_callback, 
+                       fx2dev );
+    urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
+	usb_anchor_urb ( urb, &fx2dev->submitted );
+	
+	/* send the data out the bulk port */
+	retval = usb_submit_urb ( urb, GFP_KERNEL );
+
+	mutex_unlock ( &fx2dev->io_mutex );
+	
+    if ( retval ) {
+        dev_err ( &fx2dev->interface->dev, 
+        	"%s - failed submitting write urb, error %d\n",
+        	__func__, retval );
+        goto error_unanchor;
+    }
 
 	/* release our reference to this urb, the USB core will eventually free it entirely */
-	usb_free_urb(urb);
+	usb_free_urb ( urb );
 
-    return count;
+    return writesize;
+
+error_unanchor:
+    usb_unanchor_urb(urb);
 
 error:
-    usb_buffer_free ( fx2dev->udev, count, buf, urb->transfer_dma );
-    usb_free_urb ( urb );
-   	kfree ( buf );
+	if ( urb ) {
+	    usb_buffer_free ( fx2dev->udev, writesize, buf, urb->transfer_dma );
+    	usb_free_urb ( urb );
+	}
+    up ( &fx2dev->limit_sem );
+    
+exit:
     return retval;
 }
 
@@ -572,6 +882,7 @@ static struct file_operations osrfx2_fops = {
 	.llseek  = no_llseek,
 	.read    = osrfx2_fp_read,
 	.write   = osrfx2_fp_write,
+	.flush   = osrfx2_fp_flush,
 //	.poll    = osrfx2_fp_poll,
 };
 
@@ -618,27 +929,10 @@ static int osrfx2_drv_probe (
 		
 	dev_info ( &interface->dev, "--> osrfx2_drv_probe\n" );
 
-	/* allocate memory for our device context and initialize it */
-	fx2dev = kzalloc ( sizeof ( struct osrfx2 ), GFP_KERNEL );
-	if ( !fx2dev ) {
-		dev_err ( &interface->dev, "Out of memory\n" );
-		goto error;
-	}
-	kref_init ( &(fx2dev->kref) );
-    mutex_init ( &(fx2dev->io_mutex) );
-
-	/* store our device and interface pointers for later usage */
-	fx2dev->udev = usb_get_dev ( interface_to_usbdev ( interface ) );
-	fx2dev->interface = interface;
-
-	retval = osrfx2_find_endpoints ( fx2dev );
+    retval = osrfx2_new ( &fx2dev, interface );
     if ( 0 != retval ) 
         goto error;
-    
-    retval = osrfx2_init_bulks ( fx2dev );
-    if ( 0 != retval )
-        goto error;
-
+//    assert ( fx2dev );
 
 	/* USB driver needs to retrieve the local device context data structure 
 	   that is associated with this struct usb_interface later in the 
@@ -730,6 +1024,8 @@ static void osrfx2_drv_disconnect ( struct usb_interface *interface )
     fx2dev->interface = NULL;
     mutex_unlock ( &fx2dev->io_mutex );
 
+    usb_kill_anchored_urbs ( &fx2dev->submitted );
+
 	/* decrement our usage count */
 	kref_put ( &fx2dev->kref, osrfx2_delete );
 
@@ -761,8 +1057,6 @@ static struct usb_driver osrfx2_driver = {
     .disconnect  = osrfx2_drv_disconnect,
     .id_table    = osrfx2_table,
 };
-
-
 
 /*
  This driver's commission routine, called when the driver module is installed       
