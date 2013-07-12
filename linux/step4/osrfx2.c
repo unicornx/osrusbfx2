@@ -37,6 +37,25 @@ static int debug = OSRFX2_DEBUG;
 #define dbg_info(dev, format, arg...)
 #endif //DEBUG
 
+#define ENTRY(dev, format, arg...) do \
+	{ if ( dev ) {\
+	    dev_info(dev , "--> %s: "format"\n" , __func__ , ## arg); }\
+	  else {\
+	  	pr_info("--> %s: "format"\n" , __func__ , ## arg); }\
+	} while (0)
+
+/* given retval < 0, then EXIT will be output as error */
+#define EXIT(dev, retval, format, arg...) do \
+	{  if ( (dev) && (retval<0) ) {\
+	       dev_err(dev , "<-- %s: return (%d). "format"\n" , __func__ , retval , ## arg); }\
+	   if ( (dev) && (retval>=0) ) {\
+	       dev_info(dev , "<-- %s: return (%d). "format"\n" , __func__ , retval , ## arg); }\
+	   if ( (!dev) && (retval<0) ) {\
+	       pr_err("<-- %s: return (%d). "format"\n" , __func__ , retval , ## arg); }\
+	   if ( (!dev) && (retval>=0) ) {\
+	       pr_info("<-- %s: return (%d). "format"\n" , __func__ , retval , ## arg); }\
+	} while (0)
+	
 /* 
  Table of devices that work with this driver.
  The struct usb_device_id structure is used to define a list of the different
@@ -235,7 +254,7 @@ static void osrfx2_delete ( struct kref *kref )
 	/* use macro container_of to find the appropriate device structure */
 	struct osrfx2 *fx2dev = container_of ( kref, struct osrfx2, kref );
 
-    dev_info ( &(fx2dev->interface->dev), "--> osrfx2_delete\n" );
+	ENTRY ( &(fx2dev->interface->dev), "" );
 		
     /* release a use of the usb device structure */
 	usb_put_dev ( fx2dev->udev );
@@ -252,6 +271,8 @@ static void osrfx2_delete ( struct kref *kref )
 
     /* free device context memory */
 	kfree ( fx2dev );
+
+    EXIT ( &(fx2dev->interface->dev), 0, "" );
 }
 
 static void osrfx2_draw_down ( struct osrfx2 *fx2dev )
@@ -268,27 +289,29 @@ static void osrfx2_draw_down ( struct osrfx2 *fx2dev )
 /**
  * We choose use sysfs attribte to read/write io data. More details please 
  * refer to http://www.ibm.com/developerworks/cn/linux/l-cn-sysfs/#resources
+ * & http://blog.csdn.net/king_208/article/details/5599934 for show/store
  * 
  * This routine will retrieve the bargraph LED state, format it and return a
  * representative string.                                                   
  *                                                                         
- * Note the two different function defintions depending on kernel version.  
+ * Note the two different function defintions depending on kernel version.
  */
-static ssize_t osrfx2_attr_bargraph_get (
+static ssize_t osrfx2_attr_bargraph_show (
 	struct device * dev, 
     struct device_attribute * attr, 
     char * buf )
 {
     struct usb_interface  * intf   = to_usb_interface(dev);
     struct osrfx2         * fx2dev = usb_get_intfdata(intf);
-    struct bargraph_state * packet;
-    int retval;
+    struct bargraph_state * packet = NULL;
+    int retval = 0;
 
-	dev_info ( dev, "--> osrfx2_attr_bargraph_get\n" );
+	ENTRY ( dev, "" );
 		
     packet = kzalloc ( sizeof(*packet), GFP_KERNEL );
     if ( !packet ) {
-        return -ENOMEM;
+    	retval = -ENOMEM;
+        goto exit;
     }
 
     retval = usb_control_msg ( fx2dev->udev, 
@@ -302,10 +325,7 @@ static ssize_t osrfx2_attr_bargraph_get (
                                USB_CTRL_GET_TIMEOUT );
 
     if ( retval < 0 ) {
-        dev_err ( dev, "%s - retval=%d\n", 
-                __FUNCTION__, retval );
-        kfree ( packet );
-        return retval;
+        goto error;
     }
 
     retval = sprintf( buf, "%s%s%s%s%s%s%s%s",    /* bottom LED --> top LED */
@@ -318,8 +338,10 @@ static ssize_t osrfx2_attr_bargraph_get (
                       (packet->Bar7) ? "*" : ".",
                       (packet->Bar8) ? "*" : "." );
 
-    kfree ( packet );
-
+error:
+	if ( packet ) kfree ( packet );
+exit:
+	EXIT ( dev, retval, "" );
     return retval;
 }
 
@@ -328,7 +350,7 @@ static ssize_t osrfx2_attr_bargraph_get (
 
  Note the two different function defintions depending on kernel version.
  */
-static ssize_t osrfx2_attr_bargraph_set (
+static ssize_t osrfx2_attr_bargraph_store (
 	struct device * dev, 
     struct device_attribute * attr, 
     const char * buf,
@@ -336,16 +358,17 @@ static ssize_t osrfx2_attr_bargraph_set (
 {
     struct usb_interface  * intf   = to_usb_interface(dev);
     struct osrfx2         * fx2dev = usb_get_intfdata(intf);
-    struct bargraph_state * packet;
+    struct bargraph_state * packet = NULL;
 
     int retval;
     char * end;
 
-   	dev_info ( dev, "--> osrfx2_attr_bargraph_set\n" );
+   	ENTRY ( dev, "" );
 
     packet = kzalloc ( sizeof(*packet), GFP_KERNEL );
     if ( !packet ) {
-        return -ENOMEM;
+    	retval = -ENOMEM;
+    	goto exit;
     }
 
 	packet->BarsOctet = (unsigned char)(simple_strtoul(buf, &end, 10) & 0xFF);
@@ -363,14 +386,12 @@ static ssize_t osrfx2_attr_bargraph_set (
                                sizeof(*packet),
                                USB_CTRL_GET_TIMEOUT );
 
-    if ( retval < 0 ) {
-        dev_err ( dev, "%s - retval=%d\n", 
-                __FUNCTION__, retval );
-    }
-    
-    kfree ( packet );
+exit:
+    if (packet) kfree ( packet );
 
-    return count;
+    EXIT ( dev, retval, "" );
+
+    return retval;
 }
 
 /*
@@ -383,8 +404,8 @@ static ssize_t osrfx2_attr_bargraph_set (
  */
 static DEVICE_ATTR ( bargraph, \
                      S_IRUGO | S_IWUGO, \
-                     osrfx2_attr_bargraph_get, \
-                     osrfx2_attr_bargraph_set );
+                     osrfx2_attr_bargraph_show, \
+                     osrfx2_attr_bargraph_store );
 
 static struct usb_driver osrfx2_driver;
 
@@ -414,11 +435,12 @@ static int osrfx2_fp_open ( struct inode *inode, struct file *file )
 	subminor = iminor(inode);
 	interface = usb_find_interface ( &osrfx2_driver, subminor );
 	if ( !interface ) {
-		pr_err ( "--> osrfx2_fp_open error, can't find device for minor %d\n", subminor );
-		pr_err ( "<-- osrfx2_fp_open, return (%d)\n", -ENODEV );
+		ENTRY ( NULL, "can't find device for minor %d\n", subminor );
+        EXIT ( NULL, -ENODEV, "" );
 		return -ENODEV;
 	}
-	dev_info ( &interface->dev, "--> osrfx2_fp_open for minor %d\n", subminor );
+	
+	ENTRY ( &interface->dev, "minor = %d\n", subminor );
 
 	dev = usb_get_intfdata ( interface );
 	if ( !dev ) {
@@ -441,7 +463,7 @@ static int osrfx2_fp_open ( struct inode *inode, struct file *file )
 	file->private_data = dev;
 
 exit:
-	dev_info ( &interface->dev, "<-- osrfx2_fp_open, return (%d)\n", retval );
+	EXIT ( &interface->dev, retval, "" );
 	return retval;
 }
 
@@ -458,15 +480,17 @@ static int osrfx2_fp_release ( struct inode *inode, struct file *file )
 
 	fx2dev = (struct osrfx2 *)file->private_data;
 	if ( NULL == fx2dev ) {
-		pr_err ( "--> osrfx2_fp_release, but get device failed!\n" );
+		ENTRY ( NULL, "get device failed!" );
+		EXIT ( NULL, -ENODEV, "" );
 		return -ENODEV;
 	}
-	dev_info ( &(fx2dev->interface->dev), "--> osrfx2_fp_release for minor %d\n", iminor(inode) );
+	
+	ENTRY ( &(fx2dev->interface->dev), "minor = %d", iminor(inode) );
 	
 	/* decrement the count on our device */
 	kref_put ( &fx2dev->kref, osrfx2_delete );
 
-	dev_info ( &(fx2dev->interface->dev), "<-- osrfx2_fp_release, return 0\n" );
+	EXIT ( &(fx2dev->interface->dev), 0, "" );
 	return 0;
 }
 
@@ -477,11 +501,12 @@ static int osrfx2_fp_flush ( struct file *file, fl_owner_t id )
 
     fx2dev = file->private_data;
     if ( NULL == fx2dev ) {
-    	pr_err ( "--> osrfx2_fp_flush, but get device failed!\n" );
-		pr_err ( "<-- osrfx2_fp_flush, return (%d)\n", -ENODEV );
+    	ENTRY ( NULL, "get device failed!" );
+		EXIT ( NULL, -ENODEV, "" );
         return -ENODEV;
     }
-	dev_info ( &(fx2dev->interface->dev), "--> osrfx2_fp_flush\n" );
+    
+	ENTRY ( &(fx2dev->interface->dev), "" );
 
     mutex_lock ( &fx2dev->io_mutex );
 
@@ -496,7 +521,7 @@ static int osrfx2_fp_flush ( struct file *file, fl_owner_t id )
 
     mutex_unlock ( &fx2dev->io_mutex );
     
-    dev_info ( &(fx2dev->interface->dev), "<-- osrfx2_fp_flush, return (%d)\n", rv );
+    EXIT ( &(fx2dev->interface->dev), rv, "" );
     return rv;
 }
 
@@ -505,11 +530,13 @@ static void osrfx2_fp_read_bulk_callback ( struct urb *urb )
     struct osrfx2 *fx2dev = urb->context;
 
     if ( !fx2dev ) {
-   		pr_err ( "--> osrfx2_fp_read_bulk_callback error, can't find device.\n" );
+   		ENTRY ( NULL, "can't find device." );
+   		EXIT ( NULL, -1, "" );
 		return;
     }
-	dev_info ( &(fx2dev->interface->dev), 
-		"--> osrfx2_fp_read_bulk_callback (urb status=%d, actual length = %d)\n", 
+
+	ENTRY ( &(fx2dev->interface->dev), 
+		"urb status=%d, actual length = %d", 
 		urb->status, urb->actual_length );
 
     spin_lock ( &fx2dev->err_lock );
@@ -534,6 +561,8 @@ static void osrfx2_fp_read_bulk_callback ( struct urb *urb )
     spin_unlock ( &fx2dev->err_lock );
 
     wake_up_interruptible ( &fx2dev->bulk_in_wait );
+
+    EXIT ( &(fx2dev->interface->dev), 0, "" );
 }
 
 static int osrfx2_fp_read_submit_urb ( struct osrfx2 *fx2dev, size_t count )
@@ -583,7 +612,7 @@ static int osrfx2_fp_read_submit_urb ( struct osrfx2 *fx2dev, size_t count )
  * To overcome upon shortcomings, the read mechanism was re-designed in new kenerl.
  * The new design targets to:
  * a) Supports non-blocking read IO
- * b) Supports signal interruptable during blcoking
+ * b) Supports signal interruptabled during blocking
 */
 static ssize_t osrfx2_fp_read ( 
 	struct file * file, 
@@ -597,24 +626,26 @@ static ssize_t osrfx2_fp_read (
 
 	fx2dev = ( struct osrfx2* ) file->private_data;
     if ( !fx2dev ) {
-   		pr_err ( "--> osrfx2_fp_read, can't find device.\n" );
-   		pr_err ( "<-- osrfx2_fp_read, return (%d)\n", -ENODEV );
+   		ENTRY ( NULL, "can't find device." );
+   		EXIT ( NULL, -ENODEV, "" );
 		return -ENODEV;
     }
-	dev_info ( &(fx2dev->interface->dev), "--> osrfx2_fp_read, count=%d\n", count );
+    
+	ENTRY ( &(fx2dev->interface->dev), "count=%d", count );
 
     /* if we cannot read at all, return EOF */
-    if ( !fx2dev->bulk_in_urb || !count )
-	    return 0;
+    if ( !fx2dev->bulk_in_urb || !count ) {
+		goto exit; // rv = 0;
+    }
 
     /* not allow concurrent readers */
     rv = mutex_lock_interruptible ( &fx2dev->io_mutex );
     if ( rv < 0 )
-        goto quick_exit;
+        goto exit;
 
     if ( !fx2dev->connected ) { /* disconnect() was called */
         rv = -ENODEV;
-        goto exit;
+        goto error;
     }
 
     /* if IO is under way, we must not touch things */
@@ -630,7 +661,7 @@ retry:
         if ( file->f_flags & O_NONBLOCK ) {
         	dbg_info ( &(fx2dev->interface->dev), "nonblock read, return -EAGAIN\n" );
             rv = -EAGAIN;
-            goto exit;
+            goto error;
 	    }
         /*
          * IO may take forever
@@ -640,7 +671,7 @@ retry:
         rv = wait_event_interruptible ( fx2dev->bulk_in_wait, (!fx2dev->ongoing_read) );
        	if ( rv < 0 ) {
         	dbg_info ( &(fx2dev->interface->dev), "wake up due to signal.\n" );
-            goto exit;
+            goto error;
         }
        	dbg_info ( &(fx2dev->interface->dev), "wake up due to read complete.\n" );
     }
@@ -655,7 +686,7 @@ retry:
         /* to preserve notifications about reset */
         rv = (rv == -EPIPE) ? rv : -EIO;
         /* report it */
-        goto exit;
+        goto error;
 	}
 
     /*
@@ -715,7 +746,7 @@ retry:
        		dbg_info ( &(fx2dev->interface->dev), "available is zero submit a new one\n" );
             rv = osrfx2_fp_read_submit_urb ( fx2dev, count );
             if ( rv < 0 ) {
-            	goto exit;
+            	goto error;
             }
             else {
             	/* Due to read IO is executed in async, we'd better
@@ -766,7 +797,7 @@ retry:
    		dbg_info ( &(fx2dev->interface->dev), "no data in the buffer, submit a new one\n" );
         rv = osrfx2_fp_read_submit_urb ( fx2dev, count );
         if ( rv < 0 )
-            goto exit;
+            goto error;
         else if ( !(file->f_flags & O_NONBLOCK) ) {
        		dbg_info ( &(fx2dev->interface->dev), "it's a blocking read, goto retry 2\n" );
             goto retry;
@@ -774,10 +805,10 @@ retry:
    		dbg_info ( &(fx2dev->interface->dev), "it's non-blocking read\n" );
         rv = -EAGAIN;
     }
-exit:
+error:
     mutex_unlock ( &fx2dev->io_mutex );
-quick_exit:
-	dev_info ( &(fx2dev->interface->dev), "<-- osrfx2_fp_read, return (%d)\n", rv );
+exit:
+	EXIT ( &(fx2dev->interface->dev), rv, "" );
 	return rv;
 }
 
@@ -786,11 +817,13 @@ static void osrfx2_fp_write_bulk_callback ( struct urb *urb )
     struct osrfx2 * fx2dev = (struct osrfx2 *)urb->context;
 
     if ( !fx2dev ) {
-   		pr_err ( "--> osrfx2_fp_write_bulk_callback error, can't find device.\n" );
+   		ENTRY ( NULL, "" );
+   		EXIT ( NULL, -1, "can't find device." );
 		return;
     }
-	dev_info ( &(fx2dev->interface->dev), 
-		"--> osrfx2_fp_write_bulk_callback (urb status = %d)\n", urb->status );
+    
+	ENTRY ( &(fx2dev->interface->dev), 
+		"urb status = %d", urb->status );
 
 	/* sync/async unlink faults aren't errors */
     if ( urb->status ) {
@@ -813,6 +846,8 @@ static void osrfx2_fp_write_bulk_callback ( struct urb *urb )
                      urb->transfer_buffer, 
                      urb->transfer_dma );
     up ( &fx2dev->limit_sem );
+
+    EXIT ( &(fx2dev->interface->dev), 0, "" );
 }
 
 static ssize_t osrfx2_fp_write ( 
@@ -829,11 +864,12 @@ static ssize_t osrfx2_fp_write (
 
     fx2dev = (struct osrfx2 *)file->private_data;
     if ( !fx2dev ) {
-   		pr_err ( "--> osrfx2_fp_write error, can't find device.\n" );
-   		pr_err ( "<-- osrfx2_fp_write, return (%d)\n", -ENODEV );
+   		ENTRY ( NULL, "" );
+   		EXIT ( NULL, -ENODEV, "can't find device." );
 		return -ENODEV;
     }
-	dev_info ( &(fx2dev->interface->dev), "--> osrfx2_fp_write, count=%d\n", count );
+    
+	ENTRY ( &(fx2dev->interface->dev), "count=%d\n", count );
 
   	/* verify that we actually have some data to write */
     if ( 0 == count )
@@ -938,7 +974,7 @@ error:
     up ( &fx2dev->limit_sem );
     
 exit:
-	dev_info ( &(fx2dev->interface->dev), "<-- osrfx2_fp_write, return (%d)\n", retval );
+	EXIT ( &(fx2dev->interface->dev), retval, "" );
     return retval;
 }
 
@@ -1021,7 +1057,7 @@ static int osrfx2_drv_probe (
 	int retval = -ENOMEM;
 	struct osrfx2 *fx2dev = NULL;
 		
-	dev_info ( &interface->dev, "--> osrfx2_drv_probe\n" );
+	ENTRY ( &interface->dev, "" );
 
     retval = osrfx2_new ( &fx2dev, interface );
     if ( 0 != retval ) 
@@ -1077,7 +1113,7 @@ static int osrfx2_drv_probe (
 	}
 
 	/* let the user know what node this device is now attached to */
-	dev_info ( &interface->dev,
+	EXIT ( &interface->dev, 0,
 	           "OSRFX2 device now attached to osrfx2_%d", interface->minor );
 	return 0;
 
@@ -1085,6 +1121,9 @@ error:
 	if ( fx2dev )
 		/* this frees allocated memory */
 		kref_put ( &fx2dev->kref, osrfx2_delete );
+
+	EXIT ( &interface->dev, retval, "" );
+
 	return retval;
 }
 
@@ -1102,7 +1141,7 @@ static void osrfx2_drv_disconnect ( struct usb_interface *interface )
 	struct osrfx2 *fx2dev;
 	int minor = interface->minor;
 
-	dev_info ( &interface->dev, "--> osrfx2_drv_disconnect\n" );
+	ENTRY ( &interface->dev, "" );
 
 	fx2dev = usb_get_intfdata ( interface );
 	usb_set_intfdata ( interface, NULL );
@@ -1123,7 +1162,7 @@ static void osrfx2_drv_disconnect ( struct usb_interface *interface )
 	/* decrement our usage count */
 	kref_put ( &fx2dev->kref, osrfx2_delete );
 
-	dev_info ( &interface->dev, "osrfx2_%d now disconnected\n", minor );
+	EXIT ( &interface->dev, 0, "osrfx2_%d now disconnected", minor );
 }
 
 /*
@@ -1159,13 +1198,13 @@ static int __init osrfx2_init(void)
 {
 	int result;
 
-	pr_info ( "--> osrfx2_init\n" );
+	ENTRY ( NULL, "" );
 
 	/* register this driver with the USB subsystem */
 	result = usb_register(&osrfx2_driver);
-	if (result)
-		pr_err ( "usb_register failed. Error number %d\n", result );
 
+	EXIT ( NULL, result, "" );
+	
 	return result;
 }
 
@@ -1175,10 +1214,12 @@ static int __init osrfx2_init(void)
  */
 static void __exit osrfx2_exit(void)
 {
-	pr_info ( "--> osrfx2_exit\n" );
+	ENTRY ( NULL, "" );
 	
 	/* deregister this driver with the USB subsystem */
 	usb_deregister ( &osrfx2_driver );
+
+	EXIT ( NULL, 0, "" );
 }
 
 /*****************************************************************************/
