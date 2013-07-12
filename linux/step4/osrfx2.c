@@ -105,10 +105,13 @@ struct osrfx2 {
     size_t                 bulk_in_filled;          /* number of bytes in the buffer */
     size_t                 bulk_in_copied;          /* already copied to user space */
 
-	/* USB Bulk OUT endpoint */
+	/* USB Bulk OUT endpoint 
+	   Note for Bulk OUT/write, different against read operaiton, we need not 
+	   a specific bulk_out_buffer allocated and stored in device context.
+	   When sending data, we will allocate dma-consistent buffer and free it in
+	   write callback routine the time after write IO is completed.
+	*/
     __u8                   bulk_out_endpointAddr;   /* the address of the bulk out endpoint */
-    size_t                 bulk_out_size;           /* the size of the send buffer */
-    unsigned char          *bulk_out_buffer;        /* the buffer to send data */
     struct semaphore       limit_sem;               /* limiting the number of writes in progress */
    
 };
@@ -138,7 +141,8 @@ static int osrfx2_find_endpoints ( struct osrfx2 * fx2dev )
 		     usb_endpoint_xfer_bulk ( endpoint ) ) {
 			/* we found a bulk in endpoint */
 			fx2dev->bulk_in_endpointAddr = endpoint->bEndpointAddress;
-			fx2dev->bulk_in_size = endpoint->wMaxPacketSize;
+			/* since 3.2, we need to use usb_endpoint_maxp() */
+			fx2dev->bulk_in_size = endpoint->wMaxPacketSize; 
 		}
 
 		if ( !fx2dev->bulk_out_endpointAddr &&
@@ -146,7 +150,6 @@ static int osrfx2_find_endpoints ( struct osrfx2 * fx2dev )
 		     usb_endpoint_xfer_bulk ( endpoint ) ) {
 			/* we found a bulk out endpoint */
 			fx2dev->bulk_out_endpointAddr = endpoint->bEndpointAddress;
-			fx2dev->bulk_out_size = endpoint->wMaxPacketSize;
 		}
     }
 
@@ -211,13 +214,6 @@ static int osrfx2_new ( struct osrfx2 **fx2devOut,
     init_waitqueue_head(&fx2dev->bulk_in_wait);
     
 	/* Bulk OUT */
-    fx2dev->bulk_out_buffer = kmalloc(fx2dev->bulk_out_size, GFP_KERNEL);
-    if ( !fx2dev->bulk_out_buffer ) {
-    	dev_err( &(fx2dev->interface->dev),
-    		"Could not allocate bulk_out_buffer\n" );
-        retval = -ENOMEM;
-        goto exit;
-    }
     sema_init(&fx2dev->limit_sem, WRITES_IN_FLIGHT);
     
 exit:
@@ -252,10 +248,7 @@ static void osrfx2_delete ( struct kref *kref )
     if ( fx2dev->bulk_in_urb ) {
     	usb_free_urb ( fx2dev->bulk_in_urb );
     }
-    /* free Bulk OUT memory */
-    if ( fx2dev->bulk_out_buffer ) {
-        kfree( fx2dev->bulk_out_buffer );
-    }
+    /* free Bulk OUT memory ... */
 
     /* free device context memory */
 	kfree ( fx2dev );
@@ -580,6 +573,18 @@ static int osrfx2_fp_read_submit_urb ( struct osrfx2 *fx2dev, size_t count )
     return rv;
 }
 
+/**
+ * In previous usb_skeleton.c sample, read is implemented by call synchronous
+ * api - usb_bulk_msg - this really has some defects, for example:
+ * - this disallows non-blocking IO by design
+ * - the read would not exit if no data sent from the device before time-out and 
+ *   the timeout comes out of thin air. Especially the read would block signals 
+ *   for the duriation of the timeout.
+ * To overcome upon shortcomings, the read mechanism was re-designed in new kenerl.
+ * The new design targets to:
+ * a) Supports non-blocking read IO
+ * b) Supports signal interruptable during blcoking
+*/
 static ssize_t osrfx2_fp_read ( 
 	struct file * file, 
 	char * buffer, 
@@ -602,7 +607,7 @@ static ssize_t osrfx2_fp_read (
     if ( !fx2dev->bulk_in_urb || !count )
 	    return 0;
 
-    /* no concurrent readers */
+    /* not allow concurrent readers */
     rv = mutex_lock_interruptible ( &fx2dev->io_mutex );
     if ( rv < 0 )
         goto quick_exit;
@@ -631,14 +636,17 @@ retry:
          * IO may take forever
          * hence wait in an interruptible state
          */
-    	dbg_info ( &(fx2dev->interface->dev), "waiting for read on going ...\n" );
+    	dbg_info ( &(fx2dev->interface->dev), "enter sleep and waiting for read complete ...\n" );
         rv = wait_event_interruptible ( fx2dev->bulk_in_wait, (!fx2dev->ongoing_read) );
-       	dbg_info ( &(fx2dev->interface->dev), "wait complete\n" );
-        if ( rv < 0 )
+       	if ( rv < 0 ) {
+        	dbg_info ( &(fx2dev->interface->dev), "wake up due to signal.\n" );
             goto exit;
+        }
+       	dbg_info ( &(fx2dev->interface->dev), "wake up due to read complete.\n" );
     }
 
-	/* errors must be reported */
+	/* Step in heer, the device is idle, which */
+	/* errors must be checked first and reported anyway */
 	rv = fx2dev->errors;
 	if ( rv < 0 ) {
         /* any error is reported once */
@@ -651,11 +659,47 @@ retry:
 	}
 
     /*
-     * if the buffer is filled we may satisfy the read
-     * else we need to start IO
+     if the buffer is filled after ONE submision, it's driver's responsibility
+     to copy ALL the data got by this submission before initiate next submission.
+     'bulk_in_filled' is defined to record the actual size of data driver 
+     received from ONE submission, 'bulk_in_copied' is defined to record the 
+     size of data driver has copied to userspace. Before driver completes
+     copying ALL the data filled ( 'available' == 0 ), driver expects userspace
+     application issue one or more read()'s to read back ALL the data filled in
+     the buffer. Note driver can not assume the input count size of every read()
+     from userspace caller can always hold the data we got last time from usb-core.
+     Below is a special sample demo why from driver perspective, we have to 
+     record how many we copied every time.
+
+     Reader                        Driver                       USB-core   
+       |                            |                               |
+       +-open ( O_NONBLOCK )------->|                               |
+       |                            |                               |
+       +-read ( count == 512 )----->| filled = 0                    |
+       |                            | copied = 0                    |
+       |                            |-usb_submit_urb (512)--------->|
+       |                            | return -EAGAIN                |
+       |                            |                               |
+       |                            |<---callback ( filled = 512 )--|
+       | (Note this time count      |                               |
+       |  is differnet against last |                               |
+       |  time!)                    |                               |
+       +-read ( count == 256 )----->| filled = 512                  |
+       |                            | copied = 0                    |
+       |                            | return 256, set copied = 256  |
+       |                            |                               |
+       +-read ( count == 256 )----->| filled = 512                  |
+       |                            | copied = 256                  |
+       |                            | return 256, set copied = 512  |
+       |                            |                               |       
+       +-read ( count == 256 )----->| filled = 512                  |
+       |                            | copied = 512                  |
+       |                            | Now we can issue next submission!
+       |                            |-usb_submit_urb (256)--------->|
+       ......
      */
+    /* driver has data read/filled in the buffer */ 
     if ( fx2dev->bulk_in_filled ) {
-        /* we had read data */
         size_t available = fx2dev->bulk_in_filled - fx2dev->bulk_in_copied;
         size_t chunk = min ( available, count );
 		dbg_info ( &(fx2dev->interface->dev), "we had read data filled(%d), copied(%d), chunk(%d)\n", 
@@ -663,8 +707,10 @@ retry:
 		
         if ( !available ) {
             /*
-             * all data has been used
-             * actual IO needs to be done
+             * if filled == copied, that means ALL data driver get by one submission
+             * has been used (copied).
+             * this means current read() has nothing to copy back to userspace
+             * and we can start a actual IO
              */
        		dbg_info ( &(fx2dev->interface->dev), "available is zero submit a new one\n" );
             rv = osrfx2_fp_read_submit_urb ( fx2dev, count );
@@ -672,8 +718,15 @@ retry:
             	goto exit;
             }
             else {
+            	/* Due to read IO is executed in async, we'd better
+                   give self a chance to have a try if the usb core can
+                   read back the data before we exit this time of read(). 
+                   If retry success, we can complete in current read().
+                   Don't care this read() is blocking or nonblocking here, 
+                   the retry logic upon will handle this.
+                */
    	       		dbg_info ( &(fx2dev->interface->dev), "go to retry 1\n" );
-                goto retry;
+                goto retry; 
             }
     	}
 	    /*
@@ -691,8 +744,17 @@ retry:
     	fx2dev->bulk_in_copied += chunk;
 
 	    /*
-	     * if we are asked for more than we have,
-	     * we start IO but don't wait
+	     * Till now we near completion of this read().
+	     * Check more to see if we are asked for more than we have.
+	     * If yes, we start an extra IO immedieately to help performance.
+	     * Theoretically we need not do this but just return the actual read
+	     * length to caller and leave the caller to issue another read(). But
+	     * from driver perspective, we orght to try our best to expedite
+	     * the read in behave of userspace app, this is plain as well.
+	     * After submiting the urb, we don't wait and don't judge the return value
+	     * of osrfx2_fp_read_submit_urb, bcos we are to close current read()
+	     * and just return the actual data we have read to caller, that's the most
+	     * important to us now.
 	     */
 	    if ( available < count ) {
        		dbg_info ( &(fx2dev->interface->dev), "we are asked for more than we have, submit a new one\n" );
