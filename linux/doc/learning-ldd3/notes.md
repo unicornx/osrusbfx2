@@ -47,6 +47,13 @@ or directly run 'dmesg'
 
 因为模块是被链接到内核的，所以它能够调用的函数仅仅是内核导出的函数，不存在任何可以链接的函数库。这个和用户程序是不一样的。
 
+FAQ: Clearing dmesg log
+If you want you can backup the logs using dmesg > filename before clearing it. Just execute the following command to clear and frest start the ring buffer loggin (make sure you have logged in as root).
+dmesg -c
+Another method to clear the data in your logfile is: cat /dev/null > logfile
+
+
+
 #Chapter3:#
 第一步 设备编号的注册
 
