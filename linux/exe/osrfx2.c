@@ -7,17 +7,12 @@
  *
  */
 
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-//#include <memory.h>
 #include <fcntl.h>
 #include <unistd.h> //getopt
 #include <errno.h>
-//#include <ctype.h>
-//#include <sys/stat.h>
-//#include <sys/poll.h>
 #include <assert.h>
 
 #include "public.h"
@@ -55,19 +50,19 @@
 	  __typeof__ (b) _b = (b); \
 	  _a > _b ? _a : _b; })
 
-BOOL G_fDumpUsbConfig = FALSE;    // flags set in response to console command line switches
-BOOL G_fDumpReadData = FALSE;
-BOOL G_fRead = FALSE;
-BOOL G_fWrite = FALSE;
-BOOL G_fPlayWithDevice = FALSE;
-BOOL G_fPerformBlockingIo = TRUE;
-unsigned long G_IterationCount = 1; //count of iterations of the test we are to perform
-int G_WriteLen = 512;         // #bytes to write
-int G_ReadLen = 512;          // #bytes to read
+BOOL		flag_dump_usb_config		= FALSE;	// flags set in response to console command line switches
+BOOL		flag_dump_read_data		= FALSE;
+BOOL		flag_read			= FALSE;
+BOOL		flag_write			= FALSE;
+BOOL		flag_play_with_device		= FALSE;
+BOOL		flag_perform_blocking_io	= TRUE;
+unsigned long	iteration_count			= 1;		//count of iterations of the test we are to perform
+int		write_len			= 512;		// #bytes to write
+int		read_len			= 512;		// #bytes to read
 
-char * gDevName = NULL;
-char * gDevPath = NULL;
-char * gSysPath = NULL;
+char		*dev_name			= NULL;
+char		*dev_path			= NULL;
+char		*sys_path			= NULL;
 
 typedef enum _INPUT_FUNCTION {
 	LIGHT_ONE_BAR = 1,
@@ -93,7 +88,7 @@ static int get_device_path(void)
 	char	devpath [MAX_DEVPATH_LENGTH];
 	char	syspath [MAX_DEVPATH_LENGTH];
 
-	devname = (gDevName) ? gDevName : "osrfx2_0";
+	devname = (dev_name) ? dev_name : "osrfx2_0";
 
 	// get device path
 	snprintf ( devpath, sizeof(devpath), "/dev/%s", devname );
@@ -101,11 +96,11 @@ static int get_device_path(void)
     	fprintf ( stderr, "Can't find %s device\n", devpath );
     	return -1;
 	}
-	gDevPath = strdup(devpath);
+	dev_path = strdup(devpath);
 
 	// get sys path
 	snprintf(syspath, sizeof(syspath), "/sys/class/usb/%s/device", devname);
-	gSysPath = strdup(syspath);
+	sys_path = strdup(syspath);
 
 	return 0;
 }
@@ -165,10 +160,10 @@ int parse_arg( int argc, char** argv )
 		switch(ch) {
 		case 'r':
 		case 'R':
-			G_fRead = TRUE;
+			flag_read = TRUE;
 
-			G_ReadLen = atoi(optarg);
-			if (0 == G_ReadLen) {
+			read_len = atoi(optarg);
+			if (0 == read_len) {
 				if (0 != strcmp("0", optarg)) {
 					fprintf(stderr, "atoi\n");
 					retval = 0;
@@ -178,10 +173,10 @@ int parse_arg( int argc, char** argv )
 
 		case 'w':
 		case 'W':
-			G_fWrite = TRUE;
+			flag_write = TRUE;
 			
-			G_WriteLen = atoi(optarg);
-			if (0 == G_WriteLen) {
+			write_len = atoi(optarg);
+			if (0 == write_len) {
 				if (0 != strcmp("0", optarg)) {
 					fprintf(stderr, "atoi\n");
 					retval = 0;
@@ -191,8 +186,8 @@ int parse_arg( int argc, char** argv )
             
 		case 'c':
 		case 'C':
-			G_IterationCount = atoi(optarg);
-			if (0 == G_IterationCount) {
+			iteration_count = atoi(optarg);
+			if (0 == iteration_count) {
 				if(0 != strcmp("0", optarg)) {
 					fprintf(stderr, "atoi\n");
 					retval = 0;
@@ -202,22 +197,22 @@ int parse_arg( int argc, char** argv )
             
 		case 'u':
 		case 'U':
-			G_fDumpUsbConfig = TRUE;
+			flag_dump_usb_config = TRUE;
 			break;
             
 		case 'p':
 		case 'P':
-			G_fPlayWithDevice = TRUE;
+			flag_play_with_device = TRUE;
 			break;
             
 		case 'n':
 		case 'N':
-			G_fPerformBlockingIo = FALSE;
+			flag_perform_blocking_io = FALSE;
 			break;
             
 		case 'v':
 		case 'V':
-			G_fDumpReadData = TRUE;
+			flag_dump_read_data = TRUE;
 			break;
             
 		default:
@@ -242,7 +237,7 @@ static char *get_bargraph_display(void)
 	char   attrname [MAX_DEVPATH_LENGTH];
 	char   attrvalue [32];
 
-	snprintf(attrname, sizeof(attrname), "%s/bargraph", gSysPath);
+	snprintf(attrname, sizeof(attrname), "%s/bargraph", sys_path);
 
 	fd = open(attrname, O_RDONLY);
 	if (fd == -1)
@@ -270,7 +265,7 @@ static int set_bargraph_display(unsigned char value)
 	char   attrname [MAX_DEVPATH_LENGTH];
 	char   attrvalue [32];
 
-	snprintf(attrname, sizeof(attrname), "%s/bargraph", gSysPath);
+	snprintf(attrname, sizeof(attrname), "%s/bargraph", sys_path);
 	snprintf(attrvalue, sizeof(attrvalue), "%d", value);
 	len = strlen(attrvalue) + 1;
 
@@ -297,7 +292,7 @@ static int get7SegmentDisplay( unsigned char * value )
     char   attrname [256];
     char   attrvalue [32];
 
-    snprintf(attrname, sizeof(attrname), "%s/7segment", gSysPath);
+    snprintf(attrname, sizeof(attrname), "%s/7segment", sys_path);
 
     fd = open( attrname, O_RDONLY );
     if (fd == -1)  
@@ -323,7 +318,7 @@ static int set7SegmentDisplay( unsigned char value )
     char   attrname [256];
     char   attrvalue [32];
 
-    snprintf(attrname, sizeof(attrname), "%s/7segment", gSysPath);
+    snprintf(attrname, sizeof(attrname), "%s/7segment", sys_path);
     snprintf(attrvalue, sizeof(attrvalue), "%d", value);
     len = strlen(attrvalue) + 1;
 
@@ -349,7 +344,7 @@ static char * getSwitchesState( void )
     char   attrname [256];
     char   attrvalue [32];
 
-    snprintf(attrname, sizeof(attrname), "%s/switches", gSysPath);
+    snprintf(attrname, sizeof(attrname), "%s/switches", sys_path);
 
     fd = open( attrname, O_RDONLY );
     if (fd == -1)  
@@ -375,7 +370,7 @@ static int waitForSwitchEvent( void )
     /* 
      *   Initialize pollfds; get input from /dev/osrfx2_0 
      */
-    pollfds.fd = open( gSysPath, O_RDWR );
+    pollfds.fd = open( sys_path, O_RDWR );
     if (pollfds.fd  < 0) {
         return -1;
     }
@@ -643,31 +638,37 @@ int rw_init(
 	unsigned char *p_buf_out = NULL;
 
 	/* open the device for read and write */
-	if (G_fWrite) {
+	if (flag_write) {
 		oflag = O_WRONLY;
-		if (!G_fPerformBlockingIo) oflag |= O_NONBLOCK;
-		wfd = open(gDevPath, oflag);
+		if (!flag_perform_blocking_io) oflag |= O_NONBLOCK;
+		wfd = open(dev_path, oflag);
 		if (-1 == wfd) {
-			fprintf(stderr, "open for write: %s failed\n", gDevPath);
+			fprintf(stderr, "open for write: %s failed\n", dev_path);
 			result = -1;
 			goto exit;
 		}
 
-		if (G_fDumpReadData) { 
+		if (flag_dump_read_data) { 
 			// round size to sizeof ULONG for readable dumping
-			while (G_WriteLen % sizeof(ULONG)) {
-				G_WriteLen++;
+			while (write_len % sizeof(ULONG)) {
+				write_len++;
 			}
 		}
 
-		p_buf_out = malloc(G_WriteLen);
+		p_buf_out = malloc((write_len * iteration_count));
 		if (NULL != p_buf_out) {
-			ULONG *p_buf = (ULONG *)p_buf_out;
-			ULONG num_longs = G_WriteLen / sizeof(ULONG);
+			ULONG num_longs = write_len / sizeof(ULONG);
 			/* put some data in the output buffer */
-			int j;
-			for (j=0; j<num_longs; j++) {
-				*(p_buf+j) = j;
+			int i,j;
+			unsigned char *p_buf = p_buf_out;
+			ULONG *p_long;
+			for(i=0; i< iteration_count; i++) {
+				p_long = (ULONG *)p_buf;
+				for (j=0; j<num_longs; j++) {
+					*(p_long+j) = i;
+				}
+				//dump(p_buf,  write_len);
+				p_buf += write_len;
 			}
 		} else {
 			result = -1;
@@ -675,25 +676,25 @@ int rw_init(
 		}
 	}
 
-	if (G_fRead) {
+	if (flag_read) {
 		oflag = O_RDONLY;
-		if (!G_fPerformBlockingIo) oflag |= O_NONBLOCK;
-		rfd = open(gDevPath, oflag);
+		if (!flag_perform_blocking_io) oflag |= O_NONBLOCK;
+		rfd = open(dev_path, oflag);
 		if (-1 == rfd) {
-			fprintf(stderr, "open for read: %s failed\n", gDevPath);
+			fprintf(stderr, "open for read: %s failed\n", dev_path);
 			result = -1;
 			goto exit;
 		}
 
-		if (G_fDumpReadData) { 
+		if (flag_dump_read_data) { 
 			// round size to sizeof ULONG for readable dumping
-			while (G_ReadLen % sizeof(ULONG)) {
-				G_ReadLen++;
+			while (read_len % sizeof(ULONG)) {
+				read_len++;
 			}
 		}
 
 		/* allocate buffer for read/write */
-		p_buf_in = malloc(G_ReadLen);
+		p_buf_in = malloc(read_len);
 		if (NULL == p_buf_in) {
 			result = -1;
 			goto exit;
@@ -723,19 +724,19 @@ int do_read(int rfd, unsigned char *p_buf_in, int step_iter)
 	ssize_t rlen;
 
 	do {
-		rlen = read(rfd, &p_buf_in[index], (G_ReadLen - index));
+		rlen = read(rfd, &p_buf_in[index], (read_len - index));
 		if (rlen < 0) {
 			goto exit;
 		} else if (rlen > 0){
 			printf("read (%04d)(%04d) : request %06d bytes -- %06d bytes read\n",
-				step_iter, index, (G_ReadLen - index), rlen);
+				step_iter, index, (read_len - index), rlen);
 	                index += rlen;
 		} else {
 			/* rlen == 0, reach the end of the file */
 			printf ("read to end\n");
 		}
-	} while (rlen && (index < G_ReadLen));
-	assert ( index == G_ReadLen );
+	} while (rlen && (index < read_len));
+	assert ( index == read_len );
 
 exit:
 	return rlen;
@@ -758,48 +759,48 @@ void rw_blocking()
 		return;
 	}
 
-	for (i = 0; i < G_IterationCount; i++) {
+	for (i = 0; i < iteration_count; i++) {
 
-		if (G_fWrite) {
+		if (flag_write) {
 	            //
 	            // send the write
 	            //
-			wlen = write(wfd, p_buf_out, G_WriteLen);
+			wlen = write(wfd, (p_buf_out + (i*write_len)), write_len);
 			if (wlen < 0) {
 				fprintf(stderr, "write error\n");
 				goto exit;
 			}
 			printf("write (%04d) : request %06d bytes -- %06d bytes written\n",
-				i, G_WriteLen, wlen);
-			assert(wlen == G_WriteLen);
+				i, write_len, wlen);
+			assert(wlen == write_len);
 		}
 
-		if (G_fRead) {
+		if (flag_read) {
 			rlen = do_read(rfd, p_buf_in, i);
 			if (rlen < 0) {
 				fprintf(stderr, "read error\n");
 				goto exit;
 			}
 
-			if (G_fWrite) {
+			if (flag_write) {
 
 				/* validate the input buffer against what
 				 * we sent
 				 * Till we arrive here, we have asserted length of
-				 * read should be G_ReadLen and that of write should
-				 * be G_WriteLen
+				 * read should be read_len and that of write should
+				 * be write_len
 				 */
-				if (memcmp(p_buf_out, p_buf_in, G_WriteLen) != 0) {
+				if (memcmp(p_buf_out, p_buf_in, write_len) != 0) {
 		                	fprintf(stderr, "Mismatch error between buffer contents!\n");
 				} else {
 					printf("\nMatched between Write and Read!\n");
 				}
 
-				if (G_fDumpReadData) {
+				if (flag_dump_read_data) {
 					printf("\nDumping read buffer ...\n");
-					dump(p_buf_in,  G_ReadLen);
+					dump(p_buf_in,  read_len);
 					printf("\nDumping write buffer ...\n");
-					dump(p_buf_out, G_WriteLen);
+					dump((p_buf_out + (i*write_len)), write_len);
 				}
 			}
 		}
@@ -815,7 +816,10 @@ exit:
 	if (NULL != p_buf_out) free(p_buf_out);
 }
 
-void rw_noblocking ( )
+#define READ_READY	0x01
+#define WRITE_READY	0x02
+
+void rw_noblocking()
 {
 	int rfd = -1;
 	int wfd = -1;
@@ -826,53 +830,63 @@ void rw_noblocking ( )
 	ssize_t rlen;
 
 	int i_r, i_w;
-	i_r = i_w = G_IterationCount;
+	int rw_ready = READ_READY | WRITE_READY;
 
 	fd_set rfds,wfds;
-	struct timeval timeout = {3,0}; //3 sec
+	fd_set *p_rfds;
+	fd_set *p_wfds;
+	int maxfdpl;
 
 	if (0 != rw_init(&rfd, &wfd, &p_buf_in, &p_buf_out)) {
 		fprintf(stderr, "read write init error\n");
 		return;
 	}
 
-	while (i_r && i_w) {
+	i_r = flag_read ? iteration_count : 0;
+	i_w = flag_write ? iteration_count : 0;
+
+	while (i_r || i_w) {
 
 ready_for_write:
-		if (G_fWrite) {
-			wlen = write(wfd, p_buf_out, G_WriteLen);
+		if (flag_write && i_w && (rw_ready&WRITE_READY)) {
+			int ii_w = iteration_count - i_w;
+			wlen = write(wfd, (p_buf_out + (ii_w*write_len)), write_len);
 			if (wlen != -1) {
 				printf("write (%04d) : request %06d bytes -- %06d bytes written\n",
-					i_w, G_WriteLen, wlen);
-				assert(wlen == G_WriteLen);
-				if (G_fDumpReadData) {
+					ii_w, write_len, wlen);
+				assert(wlen == write_len);
+				if (flag_dump_read_data) {
 					printf("\nDumping write buffer ...\n");
-					dump(p_buf_out, G_WriteLen);
+					dump((p_buf_out + (ii_w * write_len)), write_len);
 				}
 				i_w--;
-				continue;
+				goto ready_for_write; // continue write till failed or EAGAIN
 				
-			} else if (-EAGAIN == errno) {
-				goto wait_for_select;
+			} else if (EAGAIN == errno) {
+				printf("write returned with -EAGAIN!\n");
+				// continue to try read
 			
 			} else {
 				fprintf(stderr, "write error (%d)\n", errno);
 				goto exit;
 			}
 		}
-ready_for_read:
-		if (G_fRead) {
-			rlen = do_read(rfd, p_buf_in, i_r);
+		
+ready_for_read:	// Till now, write needs select	
+		if (flag_read && i_r && (rw_ready&READ_READY)) {
+			int ii_r = iteration_count - i_r;
+			rlen = do_read(rfd, p_buf_in, ii_r);
 			if (rlen != -1) {
-				assert(rlen == G_ReadLen);
-				if (G_fDumpReadData) {
+				assert(rlen == read_len);
+				if (flag_dump_read_data) {
 					printf("\nDumping read buffer ...\n");
-					dump(p_buf_in,  G_ReadLen);
+					dump(p_buf_in,  read_len);
 				}
 				i_r--;
-				continue;
+				goto ready_for_read; // try read till failed or EAGAIN
 				
-			} else if (-EAGAIN == errno) {
+			} else if (EAGAIN == errno) {
+				printf("read returned with -EAGAIN!\n");
 				goto wait_for_select;
 			
 			} else {
@@ -881,38 +895,59 @@ ready_for_read:
 			}
 		}
 
-wait_for_select:
+		if ((!i_r)&&(!i_w)) {
+			printf("read/write finished!\n");
+			goto exit;
+		}
+			
+wait_for_select: // Till now, read/write/both need waiting for ready
+		printf("waiting for select ...\n");
+
+		p_rfds = p_wfds = NULL;
+		maxfdpl = 0;
 		FD_ZERO(&rfds);
 		FD_ZERO(&wfds);
-		FD_SET(rfd, &rfds);
-		FD_SET(wfd, &wfds);
+		if(i_r){
+			FD_SET(rfd, &rfds);
+			p_rfds = &rfds;
+			maxfdpl = rfd;
+		}
+		if(i_w){
+			FD_SET(wfd, &wfds);
+			p_wfds = &wfds;
+			maxfdpl = max(maxfdpl,wfd);
+		}
 
-		switch(select(max(rfd,wfd) + 1, &rfds, &wfds, NULL, &timeout)) {
+		rw_ready = 0;
+
+		switch(select(maxfdpl + 1, p_rfds, p_wfds, NULL, NULL)) {// wait forever
 		case -1:
 			printf("error\n");
-			fprintf(stderr, "select error\n");
+			fprintf(stderr, "select returned with error\n");
 			goto exit;
+			break;
 		case 0:
 			printf("timeout\n");
-			fprintf(stderr, "select timeout\n");
-			break; // continue while
+			fprintf(stderr, "select returned with timeout\n");
+			goto wait_for_select; // try select again
+			break;
 		default:
-			if (FD_ISSET(rfd, &rfds)) {
-				printf("select can read\n");
-				goto ready_for_read;
+			if (i_r && FD_ISSET(rfd, &rfds)) {
+				printf("select returned with read is ready\n");
+				rw_ready |= READ_READY;
 			}
 			
-			if (FD_ISSET(wfd, &wfds)) {
-				printf("select can write\n");
-				goto ready_for_write;
+			if (i_w && FD_ISSET(wfd, &wfds)) {
+				printf("select returned with write is ready\n");
+				rw_ready |= WRITE_READY;
 			}
+			goto ready_for_write; // till now, read/write/both is ready
 			break;
 		}	
 	}
 
 exit:
-//	scanf("%d", &i);
-	
+
 	if (rfd > 0) close(rfd);
 	if (wfd > 0) close(wfd);
 
@@ -940,14 +975,14 @@ int main(int argc, char **argv)
 	/* start process */
 
 	// play
-	if (G_fPlayWithDevice) {
+	if (flag_play_with_device) {
 		play_with_device();
 		goto done;
 	}
 
 	// doing a read, write, or both test
-	if ((G_fRead) || (G_fWrite)) {
-		if (G_fPerformBlockingIo) {
+	if ((flag_read) || (flag_write)) {
+		if (flag_perform_blocking_io) {
 			printf("Starting read/write with Blocking I/O ... \n\n");
 			rw_blocking();
 		} else {
@@ -960,9 +995,9 @@ int main(int argc, char **argv)
  	 *   Clean-up and exit.
 	 */ 
 done:
-	if (gDevName)   free(gDevName);
-	if (gDevPath)   free(gDevPath);
-	if (gSysPath)   free(gSysPath);
+	if (dev_name)   free(dev_name);
+	if (dev_path)   free(dev_path);
+	if (sys_path)   free(sys_path);
 
 	return retval;
 }

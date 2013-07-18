@@ -29,37 +29,38 @@
 /* arbitrarily chosen */
 
 /* share mode when open */
-#define FILE_NOSHARE_READWRITE	1
+#define FILE_NOSHARE_READWRITE	1 /* 1: no share, 0: share */
 
 #define OSRFX2_DEBUG 1
-#define DEBUG // $$$TBD temp for test
-#ifdef DEBUG
-static int debug = OSRFX2_DEBUG;
-#define dbg_info(dev, format, arg...) do {\
-	if (debug) dev_info(dev , format , ## arg);\
-} while (0)
+#if OSRFX2_DEBUG
+	#define dbg_info(dev, format, arg...) do {\
+		dev_info(dev , format , ## arg);\
+	} while (0)
+
+	#define ENTRY(dev, format, arg...) do {\
+		if (dev) \
+			dbg_info(dev , "--> %s: "format"\n" , __func__ , ## arg);\
+		else\
+			pr_info("--> %s: "format"\n" , __func__ , ## arg);\
+	} while (0)
+
+	/* given retval < 0, then EXIT will be output as error */
+	#define EXIT(dev, retval, format, arg...) do {\
+		if ((dev) && (retval < 0))\
+			dev_err(dev , "<-- %s: return (%d). "format"\n" , __func__ , retval , ## arg);\
+		if ((dev) && (retval >= 0))\
+			dev_info(dev , "<-- %s: return (%d). "format"\n" , __func__ , retval , ## arg);\
+		if ((!dev) && (retval < 0))\
+			pr_err("<-- %s: return (%d). "format"\n" , __func__ , retval , ## arg);\
+		if ((!dev) && (retval >= 0))\
+			pr_info("<-- %s: return (%d). "format"\n" , __func__ , retval , ## arg);\
+	} while (0)
+
 #else
-#define dbg_info(dev, format, arg...)
-#endif //DEBUG
-
-#define ENTRY(dev, format, arg...) do {\
-	if (dev) \
-		dev_info(dev , "--> %s: "format"\n" , __func__ , ## arg);\
-	else\
-		pr_info("--> %s: "format"\n" , __func__ , ## arg);\
-} while (0)
-
-/* given retval < 0, then EXIT will be output as error */
-#define EXIT(dev, retval, format, arg...) do {\
-	if ((dev) && (retval < 0))\
-		dev_err(dev , "<-- %s: return (%d). "format"\n" , __func__ , retval , ## arg);\
-	if ((dev) && (retval >= 0))\
-		dev_info(dev , "<-- %s: return (%d). "format"\n" , __func__ , retval , ## arg);\
-	if ((!dev) && (retval < 0))\
-		pr_err("<-- %s: return (%d). "format"\n" , __func__ , retval , ## arg);\
-	if ((!dev) && (retval >= 0))\
-		pr_info("<-- %s: return (%d). "format"\n" , __func__ , retval , ## arg);\
-} while (0)
+	#define dbg_info(dev, format, arg...)
+	#define ENTRY(dev, format, arg...)
+	#define EXIT(dev, retval, format, arg...)
+#endif /* OSRFX2_DEBUG */
 	
 /**
  * Table of devices that work with this driver.
@@ -142,9 +143,8 @@ struct osrfx2 {
 	 * write callback routine the time after write IO is completed.
 	 */
 	__u8                   	bulk_out_endpointAddr;	/* the address of the bulk out endpoint */
-	struct semaphore       	limit_sem;		/* limiting the number of writes in progress */
 	/**
-	 * NOTE: write_inflight is defined for poll for write allowance.
+	 * NOTE: write_inflight & write_limit_sem are defined for poll for write.
 	 * OSRFX2 device spec states that the firmware will loop the transfer
 	 * from OUT endpoint to IN endpoint as a FIFO. The firmware will
 	 * configure the FX2 OUT/IN endpoints as dual-buffer, that means 
@@ -153,11 +153,16 @@ struct osrfx2 {
 	 * The fifth outstanding write packet attempt will cause the write
 	 * to block, waiting for the arrival of a read request to
 	 * effectively free a buffer into which the write data can be held.
+	 * From driver perspective, if there are already WRITES_IN_FLIGHT sent without
+	 * being drained, the (WRITES_IN_FLIGHT+1)th submission will be blocked 
+	 * and its callback will NOT be triggered by usb core.
 	 * So we define write_inflight to record the number of inflight write URBs.
 	 * If write_inflight < WRITES_IN_FLIGHT, write is allowed, otherwise not.
+	 * And aslo use a semaphore up most to WRITES_IN_FLIGHT to block the 
+	 * outstanding number of write operations on the device.
 	 */
 	int			write_inflight;		/* number of the write urbs' in flight */ 
-	
+	struct semaphore       	write_limit_sem;	/* limiting the number of writes in progress */
 };
 
 /**
@@ -264,7 +269,7 @@ static int osrfx2_new(struct osrfx2 **fx2devOut,
 	init_waitqueue_head(&fx2dev->bulk_in_wait);
 
 	/* Bulk OUT */
-	sema_init(&fx2dev->limit_sem, WRITES_IN_FLIGHT);
+	sema_init(&fx2dev->write_limit_sem, WRITES_IN_FLIGHT);
 
 exit:
 	if (retval < 0) {
@@ -640,10 +645,10 @@ static void osrfx2_fp_read_bulk_callback(struct urb *urb)
 
 	wake_up_interruptible(&fx2dev->bulk_in_wait);
 
-	/* wake-up blocked select/poll */
+	/* wake-up blocked poll */
 	wake_up(&(fx2dev->pollq_wait));
-	dev_info(&(fx2dev->interface->dev),
-		"%s - select/poll is waked up\n", __func__);
+	dbg_info(&(fx2dev->interface->dev),
+		"%s - wake up poll when data is received.\n", __func__);
 
 	EXIT(&(fx2dev->interface->dev), fx2dev->errors, "");
 }
@@ -923,15 +928,20 @@ static void osrfx2_fp_write_bulk_callback(struct urb *urb)
 	spin_lock(&fx2dev->dev_lock);
 	out_urbs = --fx2dev->write_inflight;
 	spin_unlock(&fx2dev->dev_lock);
-	dev_info(&(fx2dev->interface->dev),
+	dbg_info(&(fx2dev->interface->dev),
 		"%s - inflight write urbs --, now %d\n", __func__, out_urbs );
 
+	/* wake-up blocked poll */
+        wake_up(&(fx2dev->pollq_wait));
+	dbg_info(&(fx2dev->interface->dev),
+		"%s - wake up poll when data is sent(ack)\n", __func__);
+	
 	/* free up our allocated buffer */
 	usb_buffer_free(urb->dev,
 			urb->transfer_buffer_length,
 			urb->transfer_buffer, 
 			urb->transfer_dma);
-	up(&fx2dev->limit_sem);
+	up(&fx2dev->write_limit_sem);
 
 	EXIT(&(fx2dev->interface->dev), fx2dev->errors, "");
 }
@@ -965,12 +975,12 @@ static ssize_t osrfx2_fp_write(
 	 * RAM
 	 */
 	if (!(file->f_flags & O_NONBLOCK)) {
-	        if (down_interruptible(&fx2dev->limit_sem)) {
+	        if (down_interruptible(&fx2dev->write_limit_sem)) {
 			retval = -ERESTARTSYS;
 			goto exit;
 		}
 	} else {
-		if (down_trylock(&fx2dev->limit_sem)) {
+		if (down_trylock(&fx2dev->write_limit_sem)) {
 			retval = -EAGAIN;
 			goto exit;
 		}
@@ -1049,13 +1059,13 @@ static ssize_t osrfx2_fp_write(
 		out_urbs = ++fx2dev->write_inflight;
 		spin_unlock_irq(&fx2dev->dev_lock);
 		
-		dev_info(&(fx2dev->interface->dev),
+		dbg_info(&(fx2dev->interface->dev),
 			"%s - inflight write urbs ++, now %d\n", __func__, out_urbs );
 
-		/* wake-up blocked select/poll */
+		/* wake-up blocked poll */
 	        wake_up(&(fx2dev->pollq_wait));
-		dev_info(&(fx2dev->interface->dev),
-			"%s - select/poll is waked up\n", __func__);
+		dbg_info(&(fx2dev->interface->dev),
+			"%s - wake up poll when data is sent(submit)\n", __func__);
 		
 	}
 
@@ -1073,7 +1083,7 @@ error:
 		usb_buffer_free(fx2dev->udev, writesize, buf, urb->transfer_dma);
 		usb_free_urb(urb);
 	}
-	up(&fx2dev->limit_sem);
+	up(&fx2dev->write_limit_sem);
 
 exit:
 	EXIT(&(fx2dev->interface->dev), retval, "");
@@ -1098,19 +1108,15 @@ static unsigned int osrfx2_fp_poll(struct file *file, poll_table *wait)
 
 	poll_wait(file, &fx2dev->pollq_wait, wait);
 
-	//spin_lock_irq(&fx2dev->dev_lock);
-
 	if (!fx2dev->ongoing_read && fx2dev->bulk_in_filled &&
             (fx2dev->bulk_in_filled - fx2dev->bulk_in_copied)) {
-            /* read is not ongoing and have data filled needed to be copied back */
+            /* read is idle and have data filled needed to be copied back */
 		mask |= POLLIN | POLLRDNORM;
 	}
 	if (fx2dev->write_inflight < WRITES_IN_FLIGHT) {
 		mask |= POLLOUT | POLLWRNORM;
 	}
-	
-	//spin_unlock_irq(&fx2dev->dev_lock);
-	
+
 	mutex_unlock(&fx2dev->io_mutex);
 
 	EXIT(&(fx2dev->interface->dev), 0, "mask=0x%08x", mask);
@@ -1150,22 +1156,20 @@ static struct file_operations osrfx2_fops = {
 static struct usb_class_driver osrfx2_class = {
 	.name = "osrfx2_%d",  /* The name that sysfs uses to describe the device.*/
 	.fops = &osrfx2_fops, /* Pointer to the struct file_operations that this 
-				 driver has defined to use to register as the 
-				 character device.
-			      */
+			       * driver has defined to use to register as the 
+			       * character device.
+			       */
 	.minor_base = 
-	  OSRFX2_DEVICE_MINOR_BASE, /* Start of the assigned minor range for this 
-	                               driver. This member is ignored when 
-	                               CONFIG_USB_DYNAMIC_MINORS configuration
-                                   option has been enabled for the kernel.
-                                   Enable the CONFIG_USB_DYNAMIC_MINORS will 
-                                   make all minor numbers for the device are 
-                                   allocated on a first-come, first-served manner.
-                                   It is recommended that systems that have 
-                                   enabled this option use a program such as 
-                                   udev to manage the device nodes in the system,
-                                   as a static /dev tree will not work properly
-                                 */
+	  OSRFX2_DEVICE_MINOR_BASE,	
+	  /* Start of the assigned minor range for this driver. 
+	   * This member is ignored when CONFIG_USB_DYNAMIC_MINORS configuration
+	   * option has been enabled for the kernel.
+	   * Enable the CONFIG_USB_DYNAMIC_MINORS will make all minor numbers 
+	   * for the device are allocated on a first-come, first-served manner.
+	   * It is recommended that systems that have enabled this option use 
+	   * a program such as udev to manage the device nodes in the system,
+	   * as a static /dev tree will not work properly
+	   */
 };
 
 /** 
@@ -1264,7 +1268,6 @@ error:
 static void osrfx2_drv_disconnect(struct usb_interface *interface)
 {
 	struct osrfx2   *fx2dev;
-	int             minor = interface->minor;
 
 	ENTRY(&interface->dev, "");
 
@@ -1287,7 +1290,7 @@ static void osrfx2_drv_disconnect(struct usb_interface *interface)
 	/* decrement our usage count */
 	kref_put(&fx2dev->kref, osrfx2_delete);
 
-	EXIT(&interface->dev, 0, "osrfx2_%d now disconnected", minor);
+	EXIT(&interface->dev, 0, "osrfx2_%d now disconnected", interface->minor);
 }
 
 /**
