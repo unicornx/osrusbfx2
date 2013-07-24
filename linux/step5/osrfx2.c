@@ -6,8 +6,8 @@
  * published by the Free Software Foundation, version 2.
  *
  * Step4, this step:
- * 1) How to process read/write on bulk IN/OUT endpoints.
- * 2) How to support poll
+ * 1) How to process read on interrupt IN endpoints.
+ * 2) How to support poll on interrupt IN endpoints. 
  */
 
 #include <linux/init.h>
@@ -61,7 +61,7 @@
 	#define ENTRY(dev, format, arg...)
 	#define EXIT(dev, retval, format, arg...)
 #endif /* OSRFX2_DEBUG */
-
+	
 /**
  * Table of devices that work with this driver.
  * The struct usb_device_id structure is used to define a list of the different
@@ -120,6 +120,7 @@ struct osrfx2 {
 	*/
 	int			errors;			/* error status for the last request tanked */    
 	wait_queue_head_t	pollq_wait;		/* wait queue for select/poll */
+	int			pollq_type;		/* 1: pollq for interrupt, 0: default for bulk read/write */
 #if FILE_NOSHARE_READWRITE
 	atomic_t 		bulk_read_available;	/* share read */
 	atomic_t 		bulk_write_available;	/* share write */	 
@@ -170,6 +171,18 @@ struct osrfx2 {
 	 */
 	struct usb_anchor	submitted;
 
+	/* 4. Interrupt IN endpoint
+	 * user may press mouse key in very quick, and if the driver can not issue
+	 * urb fast enough to catch it, we will lost some key change status.!!!
+	 * Fortunately till now my driver is strong and quick enough, otherwise I
+	 * may have to create a fifo to collect and buffer the income interrupts.
+	 */
+  	__u8			int_in_addr;		/* the address of the interrupt in endpoint */
+	int			int_in_interval;	/* the intervals of the interrupt in endpoint */
+	size_t			int_in_maxp;		/* max packet size of the interrupt in endpoint */
+	struct urb		*int_in_urb;		/* the urb to read data with */
+	unsigned char		*int_in_buffer;		/* the buffer to receive data */	
+	struct mouse_position	mouse_pos;		/* */
 };
 
 /**
@@ -206,10 +219,21 @@ static int osrfx2_find_endpoints(struct osrfx2 *fx2dev)
 			/* we found a bulk out endpoint */
 			fx2dev->bulk_out_addr = endpoint->bEndpointAddress;
 		}
+
+		if(!fx2dev->int_in_addr &&
+		   usb_endpoint_dir_in(endpoint) &&
+		   usb_endpoint_xfer_int(endpoint)) {
+			/* we found an interrupt in endpoint */
+			fx2dev->int_in_addr = endpoint->bEndpointAddress;
+			fx2dev->int_in_interval = endpoint->bInterval;
+			/* since 3.2, we need to use usb_endpoint_maxp() */
+			fx2dev->int_in_maxp = endpoint->wMaxPacketSize;
+		}
 	}
 
 	if (fx2dev->bulk_in_addr == 0 ||
-	    fx2dev->bulk_out_addr == 0 ) {
+	    fx2dev->bulk_out_addr == 0 || 
+	    fx2dev->int_in_addr == 0) {
 		dev_err(&interface->dev, 
 			"%s - failed to find required endpoints\n",
 			__func__);
@@ -219,6 +243,7 @@ static int osrfx2_find_endpoints(struct osrfx2 *fx2dev)
 	return 0;
 }
 
+static void osrfx2_interrupt_in_callback(struct urb *urb);
 /**
  * constructor of osrfx2 device
  */
@@ -279,6 +304,22 @@ static int osrfx2_new(struct osrfx2 **fx2devOut,
 	/* Bulk OUT */
 	sema_init(&fx2dev->write_limit_sem, WRITES_IN_FLIGHT);
 
+	/* Interrupt IN */
+	fx2dev->int_in_buffer = kmalloc(fx2dev->int_in_maxp, GFP_KERNEL);
+	if (!fx2dev->int_in_buffer) {
+	        dev_err(&(fx2dev->interface->dev),
+			"Could not allocate int_in_buffer\n");
+		retval = -ENOMEM;
+		goto exit;
+	}	
+	fx2dev->int_in_urb = usb_alloc_urb(0, GFP_KERNEL);
+	if (!fx2dev->int_in_urb) {
+		dev_err(&(fx2dev->interface->dev),
+			"Could not allocate int_in_urb\n");
+		retval = -ENOMEM;
+		goto exit;
+	}
+
 exit:
 	if (retval < 0) {
 	        *fx2devOut = NULL;
@@ -311,7 +352,14 @@ static void osrfx2_delete(struct kref *kref)
 		usb_free_urb(fx2dev->bulk_in_urb);
 	}
 	/* free Bulk OUT memory ... */
-
+	/* free Interrupt IN memory ... */
+	if (fx2dev->int_in_buffer) {
+		kfree(fx2dev->int_in_buffer);
+	}
+	if (fx2dev->int_in_urb) {
+		usb_free_urb(fx2dev->int_in_urb);
+	}
+	
 	/* free device context memory */
 	kfree(fx2dev);
 
@@ -327,6 +375,7 @@ static void osrfx2_draw_down(struct osrfx2 *fx2dev)
 		usb_kill_anchored_urbs(&fx2dev->submitted);
 
 	usb_kill_urb(fx2dev->bulk_in_urb);
+	usb_kill_urb(fx2dev->int_in_urb);
 }
 
 /**
@@ -451,6 +500,97 @@ static DEVICE_ATTR(bargraph, \
 		   osrfx2_attr_bargraph_show, \
 		   osrfx2_attr_bargraph_store);
 
+
+/**
+ * This routine will retrieve the mouse position, format it and return a
+ * representative string.
+ *
+ * Note the two different function defintions depending on kernel version.
+ */
+static ssize_t osrfx2_attr_mousepos_show(
+		struct device		*dev,
+		struct device_attribute	*attr,
+		char			*buf)
+{
+	struct usb_interface   	*intf   = to_usb_interface(dev);
+	struct osrfx2          	*fx2dev = usb_get_intfdata(intf);
+	int retval;
+
+	ENTRY(dev, "");
+
+	/* if fx2dev->mouse_pos.direction is 0, we'd better send a ioctl to 
+	 * get it, but for mouse, we need not, just return current value
+	 */
+	spin_lock(&fx2dev->dev_lock);
+	retval = sprintf(buf, "%02X", fx2dev->mouse_pos.direction);
+	fx2dev->mouse_pos.direction = 0;
+	spin_unlock(&fx2dev->dev_lock);
+
+	EXIT(dev, retval, "");
+
+	return retval;
+}
+
+/*
+ * This macro DEVICE_ATTR creates an attribute under the sysfs directory
+ * ---  /sys/bus/usb/devices/<root_hub>-<hub>:1.0/mousepos
+ *
+ * The DEVICE_ATTR() will create "dev_attr_mousepos".
+ * "dev_attr_mousepos" is referenced in both probe (create the attribute) and 
+ * disconnect (remove the attribute) routines.
+ * NOTE: there is no "store" function for this attribute; therefore the
+ * S_IWUGO (write) flag is not included and the "store" routine point is set
+ * to NULL.
+ */
+static DEVICE_ATTR(mousepos,\
+		   S_IRUGO,\
+		   osrfx2_attr_mousepos_show,\
+		   NULL);
+
+/*
+ * This routine will set the poll type.
+ *
+ * Note the two different function defintions depending on kernel version.
+ */
+static ssize_t osrfx2_attr_polltype_store(
+		struct device           *dev,
+		struct device_attribute *attr,
+		const char              *buf,
+		size_t                  count)
+{
+	struct usb_interface  *intf   = to_usb_interface(dev);
+	struct osrfx2         *fx2dev = usb_get_intfdata(intf);
+
+	char                  *end;
+
+	ENTRY(dev, "(%s)(%d)", buf, count);
+
+	fx2dev->pollq_type = (unsigned char)simple_strtoul(buf, &end, 10);
+	if (buf == end) {
+		fx2dev->pollq_type = 0;
+	}
+
+	EXIT(dev, 0, "");
+
+	return count;
+}
+
+/*
+ * This macro DEVICE_ATTR creates an attribute under the sysfs directory
+ * ---  /sys/bus/usb/devices/<root_hub>-<hub>:1.0/polltype
+ *
+ * The DEVICE_ATTR() will create "dev_attr_polltype".
+ * "dev_attr_polltype" is referenced in both probe (create the attribute) and 
+ * disconnect (remove the attribute) routines.
+ * NOTE: there is no "show" function for this attribute; therefore the
+ * S_IRUGO (read) flag is not included and the "show" routine point is set
+ * to NULL.
+ */
+static DEVICE_ATTR(polltype,\
+		   S_IWUGO,\
+		   NULL,\
+		   osrfx2_attr_polltype_store);
+
 static struct usb_driver osrfx2_driver;
 
 /*
@@ -533,6 +673,25 @@ static int osrfx2_fp_open(struct inode *inode, struct file *file)
 
 	/* save our object in the file's private structure */
 	file->private_data = fx2dev;
+
+	/* ready operations for receiving interrupts from the device 
+	 * we'd better start this here, not in probe to avoid unexpected
+	 * error. I learn this from the /drivers/usb/misc/ldusb.c 
+	 */
+	usb_fill_int_urb(fx2dev->int_in_urb,
+			 fx2dev->udev,
+			 usb_rcvintpipe(fx2dev->udev, fx2dev->int_in_addr),
+			 fx2dev->int_in_buffer,
+			 min(fx2dev->int_in_maxp, sizeof(struct mouse_position)),
+			 osrfx2_interrupt_in_callback,
+			 fx2dev,
+			 fx2dev->int_in_interval);
+	retval = usb_submit_urb(fx2dev->int_in_urb, GFP_KERNEL);
+	if (retval != 0) {
+		dev_err(&fx2dev->udev->dev, "%s - usb_submit_urb error %d \n",
+			__func__, retval);
+		goto exit;
+	}
 
 exit:
 	EXIT(&interface->dev, retval, "");
@@ -1100,6 +1259,63 @@ exit:
 	return retval;
 }
 
+static void osrfx2_interrupt_in_callback(struct urb *urb)
+{
+	struct osrfx2		*fx2dev = urb->context;
+	struct mouse_position	*mp = urb->transfer_buffer;
+	int retval;
+
+	if (!fx2dev) {
+		ENTRY(NULL, "");
+		EXIT(NULL, -1, "can't find device.");
+		return;
+	}
+
+	ENTRY(&(fx2dev->interface->dev), "urb status = %d", urb->status);
+	
+	if (urb->status == 0) {
+		spin_lock(&fx2dev->dev_lock);
+		if (fx2dev->mouse_pos.direction) {
+			dev_info(&fx2dev->interface->dev,
+				 "%s - fifo full!, old value %d is overwritten.\n",
+				 __func__, fx2dev->mouse_pos.direction);
+		}
+		fx2dev->mouse_pos.direction = mp->direction;
+		spin_unlock(&fx2dev->dev_lock);
+		
+		/* wake-up blocked poll */
+		wake_up(&(fx2dev->pollq_wait));
+		dbg_info(&(fx2dev->interface->dev),
+			"%s - wake up poll when mouse input is received(%02x)\n",
+			__func__, fx2dev->mouse_pos.direction);
+
+		/* Restart interrupt urb */
+		retval = usb_submit_urb(urb, GFP_ATOMIC);
+		if (retval != 0) {
+			dev_err(&urb->dev->dev, "%s - error %d submitting interrupt urb\n",
+			__func__, retval);
+		}
+	} else {
+		if (!(urb->status == -ENOENT ||
+		      urb->status == -ECONNRESET ||
+		      urb->status == -ESHUTDOWN)) {
+			dev_err(&(fx2dev->interface->dev),
+				"%s - nonzero write bulk status received: %d\n",
+				__func__, urb->status);
+		}
+
+		spin_lock(&fx2dev->dev_lock);
+		fx2dev->errors = urb->status;
+		spin_unlock(&fx2dev->dev_lock);
+
+		retval = urb->status;
+	}
+
+	EXIT(&(fx2dev->interface->dev), retval, "");
+
+	return;
+}
+
 static unsigned int osrfx2_fp_poll(struct file *file, poll_table *wait)
 {
 	struct osrfx2	*fx2dev;
@@ -1122,13 +1338,20 @@ static unsigned int osrfx2_fp_poll(struct file *file, poll_table *wait)
 
 	poll_wait(file, &fx2dev->pollq_wait, wait);
 
-	if (!fx2dev->ongoing_read && fx2dev->bulk_in_filled &&
-            (fx2dev->bulk_in_filled - fx2dev->bulk_in_copied)) {
-            /* read is idle and have data filled needed to be copied back */
-		mask |= POLLIN | POLLRDNORM;
+	if (0 == fx2dev->pollq_type) {
+		if (!fx2dev->ongoing_read && fx2dev->bulk_in_filled &&
+	            (fx2dev->bulk_in_filled - fx2dev->bulk_in_copied)) {
+	            /* read is idle and have data filled needed to be copied back */
+			mask |= POLLIN | POLLRDNORM;
+		}
+		if (fx2dev->write_inflight < WRITES_IN_FLIGHT) {
+			mask |= POLLOUT | POLLWRNORM;
+		}
 	}
-	if (fx2dev->write_inflight < WRITES_IN_FLIGHT) {
-		mask |= POLLOUT | POLLWRNORM;
+	if (1 == fx2dev->pollq_type) {
+		if (fx2dev->mouse_pos.direction) {
+			mask |= POLLIN | POLLRDNORM;
+		}
 	}
 exit:
 	mutex_unlock(&fx2dev->io_mutex);
@@ -1223,6 +1446,8 @@ static int osrfx2_drv_probe(
 	 * ---  /sys/bus/usb/devices/<root_hub>-<hub>:1.0/xxxxxxxx
 	 */
 	device_create_file(&interface->dev, &dev_attr_bargraph);
+	device_create_file(&interface->dev, &dev_attr_mousepos);
+	device_create_file(&interface->dev, &dev_attr_polltype);
 
 	/* we can register the device now, as it is ready 
 	 *
@@ -1289,6 +1514,8 @@ static void osrfx2_drv_disconnect(struct usb_interface *interface)
 
 	/* remove attribute from the sysfs */
 	device_remove_file(&interface->dev, &dev_attr_bargraph);
+	device_remove_file(&interface->dev, &dev_attr_mousepos);
+	device_remove_file(&interface->dev, &dev_attr_polltype);
 
 	/* give back our minor */
 	usb_deregister_dev(interface, &osrfx2_class);

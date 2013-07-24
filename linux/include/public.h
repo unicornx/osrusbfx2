@@ -16,13 +16,14 @@
 #define OSRFX2_PRODUCT_ID	0x1002
 
 /* Define the vendor commands supported by OSR USB FX2 device. */
-#define OSRFX2_READ_7SEGMENT_DISPLAY      0xD4
-#define OSRFX2_READ_SWITCHES              0xD6
-#define OSRFX2_READ_BARGRAPH_DISPLAY      0xD7
-#define OSRFX2_SET_BARGRAPH_DISPLAY       0xD8
-#define OSRFX2_IS_HIGH_SPEED              0xD9
-#define OSRFX2_REENUMERATE                0xDA
-#define OSRFX2_SET_7SEGMENT_DISPLAY       0xDB
+#define OSRFX2_READ_7SEGMENT_DISPLAY	0xD4
+#define OSRFX2_READ_SWITCHES		0xD6
+#define OSRFX2_READ_BARGRAPH_DISPLAY	0xD7
+#define OSRFX2_SET_BARGRAPH_DISPLAY	0xD8
+#define OSRFX2_IS_HIGH_SPEED		0xD9
+#define OSRFX2_REENUMERATE		0xDA
+#define OSRFX2_SET_7SEGMENT_DISPLAY	0xDB
+#define OSRFX2_READ_MOUSEPOSITION	OSRFX2_READ_SWITCHES
 
 /**
  * BARGRAPH_STATE is a bit field structure with each bit corresponding 
@@ -37,28 +38,37 @@
 #define BARGRAPH_MAXBAR (unsigned char)4 // CY001 only have 4 LED bars availabe
 
 struct bargraph_state {
-    union {
-        struct {
+	union {
+		struct {
             /*
              * Individual bars (LEDs) starting from the top of the display.
              *
              * NOTE: The display has 10 LEDs, but the top two LEDs are not
              *       connected (don't light) and are not included here. 
              */
-            unsigned char Bar1 : 1;
-            unsigned char Bar2 : 1;
-            unsigned char Bar3 : 1;
-            unsigned char Bar4 : 1;
-            unsigned char Bar5 : 1; // not used for CY001
-            unsigned char Bar6 : 1; // not used for CY001
-            unsigned char Bar7 : 1; // not used for CY001
-            unsigned char Bar8 : 1; // used by CY001 as flag for light(1)/clear(0)
-        };
-        /*
-         *  The state of all eight bars as a single octet.
-         */
-        unsigned char BarsOctet;
-    };
+			unsigned char bar1 : 1;
+			unsigned char bar2 : 1;
+			unsigned char bar3 : 1;
+			unsigned char bar4 : 1;
+			unsigned char bar5 : 1; /* not used for CY001 */
+			unsigned char bar6 : 1; /* not used for CY001 */
+			unsigned char bar7 : 1; /* not used for CY001 */
+			unsigned char bar8 : 1; /* used by CY001 as flag for light(1)/clear(0) */
+		};
+		/*
+		 *  The state of all eight bars as a single octet.
+		 */
+		unsigned char bars;
+	};
+} __attribute__ ((packed));
+
+/**
+ * Mouse Position
+ * Refer to icd.h of osrfx2fw
+ * "Mouse Position tracking simulation" section to get more details
+ */
+struct mouse_position {
+ 	unsigned char direction;
 } __attribute__ ((packed));
 
 #endif /*_PUBLIC_H */

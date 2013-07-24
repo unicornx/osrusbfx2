@@ -112,7 +112,6 @@ static int osrfx2_drv_probe(
 	return retval;
 }
 
-
 /**
  * The disconnect function is called when the driver should no longer control 
  * the device for some reason and can do clean-up.

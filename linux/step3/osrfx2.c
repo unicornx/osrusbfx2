@@ -96,13 +96,13 @@ MODULE_DEVICE_TABLE (usb, osrfx2_table);
  */
 struct osrfx2 {
 	/* 1. device level attributes */
-	struct usb_device      	*udev;			/* the usb device for this device */
-        struct usb_interface   	*interface;		/* the interface for this usb device
+	struct usb_device	*udev;			/* the usb device for this device */
+        struct usb_interface	*interface;		/* the interface for this usb device
                                                          * Note, for osrfx2 device, it has only
                                                          * one interface.
                                                          */
-	struct kref            	kref;			/* Refrence counter for a device */
-	struct mutex           	io_mutex;		/* synchronize I/O with disconnect */
+	struct kref		kref;			/* Refrence counter for a device */
+	struct mutex		io_mutex;		/* synchronize I/O with disconnect */
 #if FILE_NOSHARE_READWRITE
 	atomic_t 		bulk_read_available;	/* share read */
 	atomic_t 		bulk_write_available;	/* share write */	 
@@ -169,8 +169,8 @@ static void osrfx2_delete(struct kref *kref)
 
 /**
  * We choose use sysfs attribte to read/write io data. More details please 
- * refer to http://www.ibm.com/developerworks/cn/linux/l-cn-sysfs/#resources
- * & http://blog.csdn.net/king_208/article/details/5599934 for show/store
+ * refer to http://www.ibm.com/developerworks/cn/linux/l-cn-sysfs/
+ * && http://blog.csdn.net/king_208/article/details/5599934 for show/store
  * 
  * This routine will retrieve the bargraph LED state, format it and return a
  * representative string.                                                   
@@ -211,14 +211,14 @@ static ssize_t osrfx2_attr_bargraph_show(
 
 	retval = sprintf(buf, 
 			 "%s%s%s%s%s%s%s%s",    /* bottom LED --> top LED */
-			 (packet->Bar1) ? "*" : ".",
-			 (packet->Bar2) ? "*" : ".",
-			 (packet->Bar3) ? "*" : ".",
-			 (packet->Bar4) ? "*" : ".",
-			 (packet->Bar5) ? "*" : ".",
-			 (packet->Bar6) ? "*" : ".",
-			 (packet->Bar7) ? "*" : ".",
-			 (packet->Bar8) ? "*" : "." );
+			 (packet->bar1) ? "*" : ".",
+			 (packet->bar2) ? "*" : ".",
+			 (packet->bar3) ? "*" : ".",
+			 (packet->bar4) ? "*" : ".",
+			 (packet->bar5) ? "*" : ".",
+			 (packet->bar6) ? "*" : ".",
+			 (packet->bar7) ? "*" : ".",
+			 (packet->bar8) ? "*" : "." );
 
 error:
 	if (packet) kfree (packet);
@@ -245,7 +245,7 @@ static ssize_t osrfx2_attr_bargraph_store(
 	int                   retval;
 	char                  *end;
 
-	ENTRY(dev, "");
+	ENTRY(dev, "(%s)(%d)", buf, count);
 
 	packet = kzalloc(sizeof(*packet), GFP_KERNEL);
 	if (!packet) {
@@ -253,9 +253,9 @@ static ssize_t osrfx2_attr_bargraph_store(
 		goto exit;
 	}
 
-	packet->BarsOctet = (unsigned char)(simple_strtoul(buf, &end, 10) & 0xFF);
+	packet->bars = (unsigned char)(simple_strtoul(buf, &end, 10) & 0xFF);
 	if (buf == end) {
-		packet->BarsOctet = 0;
+		packet->bars = 0;
 	}
 
 	retval = usb_control_msg(fx2dev->udev,
@@ -273,7 +273,7 @@ exit:
 
 	EXIT(dev, retval, "");
 
-	return retval;
+	return count;
 }
 
 /*
@@ -431,10 +431,10 @@ static int osrfx2_fp_release(struct inode *inode, struct file *file)
  * functions. Application can invoke them through kernel on a device.
  */
 static struct file_operations osrfx2_fops = {
-	.owner   = THIS_MODULE,
-	.open    = osrfx2_fp_open,
-	.release = osrfx2_fp_release,
-	.llseek  = no_llseek,
+	.owner		= THIS_MODULE,
+	.open		= osrfx2_fp_open,
+	.release	= osrfx2_fp_release,
+	.llseek		= no_llseek,
 };
 
 /** 
@@ -496,8 +496,8 @@ static int osrfx2_drv_probe(
 	 */
 	usb_set_intfdata(interface, fx2dev);
 
-	/* create bargraph attribute under the sysfs directory
-	 * ---  /sys/bus/usb/devices/<root_hub>-<hub>:1.0/bargraph
+	/* create attributes under the sysfs directory
+	 * ---  /sys/bus/usb/devices/<root_hub>-<hub>:1.0/xxxxxxxx
 	 */
 	device_create_file(&interface->dev, &dev_attr_bargraph);
 
@@ -564,7 +564,7 @@ static void osrfx2_drv_disconnect(struct usb_interface *interface)
 	fx2dev = usb_get_intfdata(interface);
 	usb_set_intfdata(interface, NULL);
 
-	/* remove bargraph attribute from the sysfs */
+	/* remove attribute from the sysfs */
 	device_remove_file(&interface->dev, &dev_attr_bargraph);
 
 	/* give back our minor */

@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------
-# Copyright (C) Robin Callender
+# Copyright (C) unicornx
 #
 # Makefile for all of the osrfx2 driver project.
 #
@@ -20,57 +20,65 @@ SUDO   = sudo
 # The dependency object files
 #------------------------------------------------------------------------------
                 
-BINS   = driver/osrfx2.ko            \
-         osrbulk/osrbulk             \
-         osrfx2/osrfx2               \
-         switch_events/switch_events
+BINS   = exe/osrfx2                  \
+         step1/osrfx2.ko             \
+         step2/osrfx2.ko             \
+         step3/osrfx2.ko             \
+         step4/osrfx2.ko             \
+         step5/osrfx2.ko
 
 MAKES  = Makefile                    \
-         driver/Makefile             \
-         osrbulk/Makefile            \
-         osrfx2/osrfx2               \
-         switch_events/Makefile
+         exe/Makefile                \
+         step1/Makefile              \
+         step2/Makefile              \
+         step3/Makefile              \
+         step4/Makefile              \
+         step5/Makefile
 
 #------------------------------------------------------------------------------
 # Make each subcomponent of the project.
 #------------------------------------------------------------------------------
 all:    $(MAKES) $(BINS)
 
-driver/osrfx2.ko: 
-	$(MAKE) -C driver         -f Makefile
+exe/osrfx2: 
+	$(MAKE) -C exe            -f Makefile
 
-osrbulk/osrbulk: 
-	$(MAKE) -C osrbulk        -f Makefile
+step1/osrfx2.ko: 
+	$(MAKE) -C step1          -f Makefile
 
-osrfx2/osrfx2:
-	$(MAKE) -C osrfx2         -f Makefile
+step2/osrfx2.ko: 
+	$(MAKE) -C step2          -f Makefile
 
-switch_events/switch_events: 
-	$(MAKE) -C switch_events  -f Makefile
+step3/osrfx2.ko: 
+	$(MAKE) -C step3          -f Makefile
+
+step4/osrfx2.ko: 
+	$(MAKE) -C step4          -f Makefile
+
+step5/osrfx2.ko: 
+	$(MAKE) -C step5          -f Makefile
 
 #------------------------------------------------------------------------------
 # Delete project build remenents
 #------------------------------------------------------------------------------
 clean: 
 	$(MAKE) -C driver         -f Makefile clean
-	$(MAKE) -C osrbulk        -f Makefile clean
-	$(MAKE) -C osrfx2         -f Makefile clean
-	$(MAKE) -C switch_events  -f Makefile clean
+	$(MAKE) -C exe            -f Makefile clean
 	$(MAKE) -C step1          -f Makefile clean
 	$(MAKE) -C step2          -f Makefile clean
 	$(MAKE) -C step3          -f Makefile clean
 	$(MAKE) -C step4          -f Makefile clean
-	$(MAKE) -C exe            -f Makefile clean
+	$(MAKE) -C step5          -f Makefile clean	
 
 #------------------------------------------------------------------------------
 # Install components
 #------------------------------------------------------------------------------
-install:
-	$(SUDO) $(MAKE) -C driver -f Makefile install
+#install:
+#	$(SUDO) $(MAKE) -C driver -f Makefile install
 
 #------------------------------------------------------------------------------
 # Uninstall components
 #------------------------------------------------------------------------------
-uninstall:
-	$(SUDO) $(MAKE) -C driver -f Makefile uninstall
+#uninstall:
+#	$(SUDO) $(MAKE) -C driver -f Makefile uninstall
 

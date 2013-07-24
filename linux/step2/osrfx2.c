@@ -97,13 +97,13 @@ MODULE_DEVICE_TABLE (usb, osrfx2_table);
  */
 struct osrfx2 {
 	/* 1. device level attributes */
-	struct usb_device      	*udev;			/* the usb device for this device */
-        struct usb_interface   	*interface;		/* the interface for this usb device
+	struct usb_device	*udev;			/* the usb device for this device */
+        struct usb_interface	*interface;		/* the interface for this usb device
                                                          * Note, for osrfx2 device, it has only
                                                          * one interface.
                                                          */
-	struct kref            	kref;			/* Refrence counter for a device */
-	struct mutex           	io_mutex;		/* synchronize I/O with disconnect */
+	struct kref		kref;			/* Refrence counter for a device */
+	struct mutex		io_mutex;		/* synchronize I/O with disconnect */
 #if FILE_NOSHARE_READWRITE
 	atomic_t 		bulk_read_available;	/* share read */
 	atomic_t 		bulk_write_available;	/* share write */	 
@@ -310,10 +310,10 @@ static int osrfx2_fp_release(struct inode *inode, struct file *file)
  * functions. Application can invoke them through kernel on a device.
  */
 static struct file_operations osrfx2_fops = {
-	.owner   = THIS_MODULE,
-	.open    = osrfx2_fp_open,
-	.release = osrfx2_fp_release,
-	.llseek  = no_llseek,
+	.owner		= THIS_MODULE,
+	.open		= osrfx2_fp_open,
+	.release	= osrfx2_fp_release,
+	.llseek		= no_llseek,
 };
 
 /** 
@@ -419,7 +419,6 @@ error:
 
 	return retval;
 }
-
 
 /**
  * The disconnect function is called when the driver should no longer control 

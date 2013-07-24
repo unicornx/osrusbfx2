@@ -227,6 +227,109 @@ int parse_arg( int argc, char** argv )
 	return retval;
 }
 
+static void get_mouse_position_by_interrupt(void)
+{
+	int			fd = -1;
+	int			afd = -1;
+	char			attrname [MAX_DEVPATH_LENGTH];
+	char			polltype[2];
+	char			mp[32];
+	fd_set			rfds;
+	int			retval;
+	int			X, Y;
+
+	/* change poll type */
+	snprintf(attrname, sizeof(attrname), "%s/polltype", sys_path);
+	afd = open(attrname, O_WRONLY);
+	if (afd == -1){
+		printf("open device(%s) failed!\n", attrname);
+		goto exit;
+	        return;
+	}
+	snprintf(polltype, 2, "1");
+	if (1 != write(afd, &polltype, 1)) {
+		printf("write poll flag failed!\n");
+	        goto exit;
+	}
+	close(afd);
+
+	/* open the attribute to read mouse position */
+	snprintf(attrname, sizeof(attrname), "%s/mousepos", sys_path);
+	afd = open(attrname, O_RDONLY);
+	if (afd == -1){
+		printf("open device(%s) failed!\n", attrname);
+	        goto exit;
+	}
+
+	/* open the device for poll */
+	fd = open(dev_path, O_RDONLY);
+	if (fd == -1){
+		printf("open device(%s) failed!\n", dev_path);
+	        goto exit;
+	}
+
+	retval = 1;
+	X = Y = 0;
+	printf("Tracking mouse position: X=   0, Y=   0. Press ENTER to stop.");
+	/* On why we need to flush,
+	 * Refer http://stackoverflow.com/questions/1716296/why-does-printf-not-flush-after-the-call-unless-a-newline-is-in-the-format-strin
+	 */
+	fflush(stdout);
+
+	while (retval>0) {
+
+		FD_ZERO(&rfds);
+		FD_SET(fd, &rfds);
+		FD_SET(STDIN_FILENO, &rfds);
+
+		retval = select(max(STDIN_FILENO,fd) + 1, &rfds, NULL, NULL, NULL); // wait forever
+
+		if (retval<=0) {
+			printf("error\n");
+			fprintf(stderr, "select returned with error\n");
+			break;
+		}
+		
+		if (FD_ISSET(STDIN_FILENO, &rfds)) {
+			/* Have not got idea to support press any key to quit.
+			 * Details refer to http://stackoverflow.com/questions/7410447/why-getch-returns-before-press-any-key
+			 */
+			break;
+		}
+		
+		// read is ready
+		if (FD_ISSET(fd, &rfds)) {
+			memset(mp, 0x00, 32);
+			retval = read(afd, mp, 32);
+			if (retval>0) {
+				if (!strcmp(mp, "01")) {
+					Y++;
+				}
+				if (!strcmp(mp, "02")) {
+					Y--;
+				}
+				if (!strcmp(mp, "04")) {
+					X--;
+				}
+				if (!strcmp(mp, "08")) {
+					X++;
+				}
+				printf("\rTracking mouse position: X=%4d, Y=%4d. Press ENTER to stop.",
+					X, Y);
+				fflush(stdout);
+			} else {
+				printf("read error %d\n", retval);
+				break;
+			}
+			lseek(afd, 0, SEEK_SET);
+		}
+	}
+
+exit:
+	if (-1 != afd)	close(afd);
+	if (-1 != fd) 	close(fd);
+}
+
 /*---------------------------------------------------------------------------*/
 /*                                                                           */
 /*---------------------------------------------------------------------------*/
@@ -245,6 +348,7 @@ static char *get_bargraph_display(void)
 
 	memset(attrvalue, 0x00, 32);
 	count = read(fd, &attrvalue, sizeof(attrvalue));
+	
 	close(fd);
 
 	if (count == 8) { 
@@ -515,32 +619,8 @@ void play_with_device()
 			break;
 
 		case GET_MOUSE_POSITION_AS_INTERRUPT_MESSAGE:
-			printf("\nOSRFX2 -- to be done\n");
-	#if 0
-	            {
-	                if( waitForSwitchEvent() != 0) {
-	                    break;
-	                }
-	            }
-	            /* Note fall-through to case 5 */
-	                        {
-	                char * str = getSwitchesState();
-	                if (str) {
-	                    printf("Switches: \n");
-	                    printf("    Switch8 is %s\n", str[7] == '*' ? "ON" : "OFF");
-	                    printf("    Switch7 is %s\n", str[6] == '*' ? "ON" : "OFF");
-	                    printf("    Switch6 is %s\n", str[5] == '*' ? "ON" : "OFF");
-	                    printf("    Switch5 is %s\n", str[4] == '*' ? "ON" : "OFF");
-	                    printf("    Switch4 is %s\n", str[3] == '*' ? "ON" : "OFF");
-	                    printf("    Switch3 is %s\n", str[2] == '*' ? "ON" : "OFF");
-	                    printf("    Switch2 is %s\n", str[1] == '*' ? "ON" : "OFF");
-	                    printf("    Switch1 is %s\n", str[0] == '*' ? "ON" : "OFF");
-	                    free(str);
-	                }
-	            }
-	            break;
-
-	#endif
+			get_mouse_position_by_interrupt();
+			break;
 
 		case GET_7_SEGEMENT_STATE:
 			printf("\nOSRFX2 -- to be done\n");
