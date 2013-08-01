@@ -105,3 +105,11 @@ git apt-get clean
 14) About GTK
 http://stackoverflow.com/questions/10548924/starting-with-gtk-on-ubuntu
 That package(GTK3) is not available for ubuntu 10.04,It is the development libraries of GTk3 whereas 10.04 is a Gtk2 distro, So you can't install it in 10.04
+
+15) Paint
+Top 9 Painting Programs for Ubuntu: http://www.tuxarena.com/2011/06/top-7-painting-programs-for-ubuntu/
+I like Pinta, on how to install pinta: http://www.linoob.com/2011/05/06/paint-net-for-ubuntu-aka-pinta-1-0/
+Tried Gpaint, but it can not undo, oops :S!
+
+16) gnome-device-manager
+
