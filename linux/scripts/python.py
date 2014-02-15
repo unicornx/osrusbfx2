@@ -1,7 +1,25 @@
- list=[]
-for f in os.listdir('.'):
-	if os.path.isfile(os.path.join('./',f)):
-		print(f,"is a file")
-		list.append(f)
-		
-		pid = commands.getoutput('cat /sys/devices/pci0000:00/0000:00:1d.1/usb3/3-1/idProduct')
+#!/usr/bin/python
+# Filename: utility.py
+'''Common utilities.
+
+'''
+
+from os import listdir, chdir
+from os.path import isdir, join
+import re
+
+def find_device(search_path):
+	'''Find the osrfx2 device connected.
+	
+	'''
+	usb_dirs=[]
+	pattern = re.compile(r'osrfx2_[0-255]')
+	for f in os.listdir(search_path):
+		if isdir(join('./', f)):
+			match = pattern.match(f)
+			if match:
+				print("find OSR USB-FX2 device %s" %(f))
+				break
+	
+	
+# byteofpython
