@@ -19,7 +19,7 @@ def find_device(search_path):
 		return ""
 
 	usb_dirs = []
-	pattern = re.compile(r'osrfx2_[0-255]')
+	pattern = re.compile(r'osrfx2_[0-9]')
 	for file_name in listdir(dev_search_path):
 		dev_path = join(dev_search_path, file_name) 
 		if islink(dev_path) and pattern.match(file_name):
