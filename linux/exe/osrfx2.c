@@ -150,7 +150,7 @@ int parse_arg( int argc, char** argv )
 
 	/* Regarding getopt, refer to http://blog.csdn.net/lazy_tiger/article/details/1806367 */
 	while ((1 == retval) && 
-		((ch = getopt(argc, argv, "r:R:w:W:c:C:uUpNnSvV")) != -1)) {
+		((ch = getopt(argc, argv, "r:R:w:W:c:C:uUpPnNvV")) != -1)) {
 #if 0
     	printf("optind:%d\n",optind);
     	printf("optarg:%s\n",optarg);
