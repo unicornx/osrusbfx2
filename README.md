@@ -63,8 +63,7 @@ mkdir yourworkspacefolder
 cd yourworkspacefolder  
 git clone https://github.com/unicornx/osrusbfx2.git
 
-该项目另一个发布的平台在“图灵社区” - "osrusbfx2 - Step by Step USB驱动开发"
-Another publish window:  
+该项目另一个发布的平台（another publish window）在“图灵社区” - "osrusbfx2 - Step by Step USB驱动开发"  
 http://www.ituring.com.cn/minibook/726
 
 enjoy it! :)
