@@ -2,7 +2,7 @@
 
 Based on "OSRFX2 Learning Kit" + "CY001 learning Kit", added more with my idea to demo how-to learning writing host drivers for USB devices on Windows & Linux.
 
-# 为何要写这个东东 Why write this  
+# 为何要写这个东东 / Why write this  
 诸位学习主机（host）侧USB驱动开发的同仁，想必在学习过程中一定也有鄙人相同的经历感受。那就是手头如果有一块USB的开发学习板，那效率一定会高很多。所以在下当时也是出于此目的在网上买了张佩大侠提供的配合《竹林蹊径：深入浅出windows驱动开发》的学习板CY001，以作学习的用途。
 
 Hi, every buddy, are you learning write host side USB drivers? If yes, I hope you would feel great if you have one USB learning-board at hand the same time. I bought one (CY001 from ZhangPei) and being enjoy it very much.
@@ -24,7 +24,7 @@ And the next, I made this project. If you have one CY001, or any other USB learn
 I also ported osrusbfx2 sample to Linux, if you love Linux more than Windows, check this out.
 
 
-# 目录结构/Directory  
+# 目录结构 / Directory  
 + osrfx2fw - CY001(基于Cypress EZ-USB FX2LP)的固件Keil工程源代码。已经过修改模拟OSRFX2学习板  
  - [README](./osrfx2fw/README.md): 介绍了如何基于CY001模拟OSRFX2。  
 + windows  - Windows版本的源代码和相关文件。已经过修改以适配CY001与实际的OSRFX2学习板的不同。  
@@ -50,14 +50,14 @@ I also ported osrusbfx2 sample to Linux, if you love Linux more than Windows, ch
 
 更详细的说明可以参考各分目录下的说明文件。  
 
-# 联系方式/Contact  
+# 联系方式 / Contact  
 unicorn_wang@outlook.com
 
 
-# 下载和访问/Download  
+# 下载和访问 / Download  
 该项目的所有文档和代码都上传到GitHub，大家如果熟悉GitHub可以上Github观赏并联机提出宝贵意见。地址是: https://github.com/unicornx/osrusbfx2
 
-下载该项目的方法/Download Method：
+下载该项目的方法 / Download Method：
 
 mkdir yourworkspacefolder  
 cd yourworkspacefolder  
