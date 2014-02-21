@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # Filename: getch.py
-'''Getch to read a single character in both Windows and Linux:Test app for osrfx2 driver.
+'''Getch to read a single character in both Windows and Linux.
 
 Refer to http://stackoverflow.com/questions/510357/python-read-a-single-character-from-the-user
 '''
