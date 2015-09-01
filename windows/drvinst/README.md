@@ -31,7 +31,8 @@ drvInst.exe /u osrusbfx2.inf, to uninstall devices from the devnodes no matter i
 # 目录结构
 
 # 联系方式
-unicorn_wang@outlook.com
+**Email: unicorn_wang@outlook.com**  
+**Blog:  http://unicornx.gitcafe.io/**
 
 p.s. 该项目已经上传到GitHub，大家如果熟悉GitHub也可以上Github观赏并联机提出宝贵意见。地址是: https://github.com/unicornx/osrusbfx2
 

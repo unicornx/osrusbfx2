@@ -15,7 +15,8 @@ drvInst.exe /i osrusbfx2.inf 16
 更详细的介绍请看[device-and-driver-installation.md](../drvinst/device-and-driver-installation.md)
 
 # 联系方式
-unicorn_wang@outlook.com
+**Email: unicorn_wang@outlook.com**  
+**Blog:  http://unicornx.gitcafe.io/**
 
 p.s. 该项目已经上传到GitHub，大家如果熟悉GitHub也可以上Github观赏并联机提出宝贵意见。地址是: https://github.com/unicornx/osrusbfx2
 

@@ -14,7 +14,8 @@ By the date I downloaded this project from sourceforge, the latest version is 0.
 有关支持udev设备热插拔的说明 [README.udev](./README.udev)  
 
 # 联系方式
-unicorn_wang@outlook.com
+**Email: unicorn_wang@outlook.com**  
+**Blog:  http://unicornx.gitcafe.io/**
 
 p.s. 该项目已经上传到GitHub，大家如果熟悉GitHub也可以上Github观赏并联机提出宝贵意见。地址是: https://github.com/unicornx/osrusbfx2
 

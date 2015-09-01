@@ -51,8 +51,8 @@ I also ported osrusbfx2 sample to Linux, if you love Linux more than Windows, ch
 更详细的说明可以参考各分目录下的说明文件。  
 
 # 联系方式 / Contact  
-unicorn_wang@outlook.com
-
+**Email: unicorn_wang@outlook.com**  
+**Blog:  http://unicornx.gitcafe.io/**
 
 # 下载和访问 / Download  
 该项目的所有文档和代码都上传到GitHub，大家如果熟悉GitHub可以上Github观赏并联机提出宝贵意见。地址是: https://github.com/unicornx/osrusbfx2
