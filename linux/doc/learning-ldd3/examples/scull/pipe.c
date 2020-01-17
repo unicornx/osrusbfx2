@@ -361,9 +361,9 @@ int scull_p_init(dev_t firstdev)
 	}
 	memset(scull_p_devices, 0, scull_p_nr_devs * sizeof(struct scull_pipe));
 	for (i = 0; i < scull_p_nr_devs; i++) {
-		init_waitqueue_head(&(scull_p_devices[i].inq));
-		init_waitqueue_head(&(scull_p_devices[i].outq));
-		init_MUTEX(&scull_p_devices[i].sem);
+		init_waitqueue_head(&(scull_devices[i].inq));
+		init_waitqueue_head(&(scull_devices[i].outq));
+		sema_init(&(scull_devices[i].sem), 1);
 		scull_p_setup_cdev(scull_p_devices + i, i);
 	}
 #ifdef SCULL_DEBUG
